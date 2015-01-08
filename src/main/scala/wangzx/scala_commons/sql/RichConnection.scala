@@ -145,6 +145,18 @@ class RichConnection(conn: Connection) {
     buffer.toList
   }
 
+  def queryInt(sql: SQLWithArgs): Int = {
+    val prepared = conn.prepareStatement(sql.sql)
+    if(sql.args != null)
+      sql.args.zipWithIndex.foreach { case (v, idx) => prepared.setObject(idx+1, v) }
+
+    val rs = prepared.executeQuery()
+
+    if(rs.next) {
+      rs.getInt(1)
+    } else throw new IllegalArgumentException("query return no rows")
+  }
+
   def insert[T](bean: T) {
     val beanMapping = BeanMapping.getBeanMapping(bean.getClass).asInstanceOf[BeanMapping[T]]
     val idColumns = beanMapping.idFields

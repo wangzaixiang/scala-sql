@@ -110,7 +110,7 @@ class Row(meta: ResultSetMetaData, rs: ResultSet) /* extends Dynamic */ {
 
   val cells: Seq[Cell[_]] = {
     for (i <- 1 to meta.getColumnCount) yield {
-      val name = meta.getColumnName(i)
+      val name = meta.getColumnLabel(i)
       val sqltype = meta.getColumnType(i)
       val isnull = rs.getObject(i) == null
 

@@ -32,6 +32,8 @@ class RichDataSource(datasource: DataSource) {
 
   def rows[T <: AnyRef](sql: SQLWithArgs)(implicit ct: ClassTag[T]): List[T] = withConnection(_.rows(sql)(ct))
 
+  def queryInt(sql: SQLWithArgs): Int = withConnection(_.queryInt(sql))
+
   def insert(bean: AnyRef) = withConnection(_.insert(bean))
 
 
