@@ -1,17 +1,13 @@
 utility scala-sql
 =================
 
+scala has published to Maven Central as com.github.wangzaixiang/scala-sql/1.0.0-beta
+
 sbt usage:
 ```sbt
-resolvers += "wangzx repository" at "https://raw.githubusercontent.com/wangzaixiang/repository/master/"
+libraryDependencies +=  "com.github.wangzaixiang" %% "scala-sql" % "1.0.0-beta"
+scalaVersion := "2.11.6"
 
-libraryDependencies ++= Seq(
-  "wangzx" %% "scala-sql" % "1.0.0-beta",
-  "com.h2database" % "h2" % "1.4.184"
-)
-
-scalaVersion := "2.11.4"
-}
 ```
 
 Changelog
@@ -21,8 +17,4 @@ Changelog
 
 TODO
 =====
-* publish to maven central
 * refract executeUpdateWithGenerateKey(sql)(processGenerateKeys) to what?
-* BeanMapping support(union Scala Bean and Java Bean)
-* scala.math.BigDecimal support
-* support using multi SqlWithArgs sql"" + sql""
