@@ -27,7 +27,7 @@ object BeanMapping {
   val ClassOfScalaBigDecimal = classOf[scala.math.BigDecimal]
   val ClassOfByteArray = classOf[Array[Byte]]
 
-  val G_BeanMappings = collection.mutable.Map[Class[_], SoftReference[BeanMapping[_]]]()
+  val G_BeanMappings = new SoftMap[Class[_], BeanMapping[_]]()
 
   /**
    * for a scala anonymous class, automate choose the parent
@@ -56,31 +56,21 @@ object BeanMapping {
     case _ => false
   }
 
-
-  // TODO scala 2.11 dont provide ScalaObject so we may need another way to identify scala bean
-  //
   def getBeanMapping[T](clazz: Class[T]): BeanMapping[T] = {
     synchronized {
-      val cached = G_BeanMappings.get(clazz)
+      val cached: Option[BeanMapping[_]] = G_BeanMappings.get(clazz)
       cached match {
-        case Some(x) => x.get match {
-          case Some(result) => return result.asInstanceOf[BeanMapping[T]]
-          case None =>
-        }
-        case _ =>
+        case Some(result) =>
+          result.asInstanceOf[BeanMapping[T]]
+
+        case None =>
+          val realClass = real_class(clazz)
+          val mapping = new UnionBeanMapping(realClass)
+          G_BeanMappings(clazz) = mapping
+          return mapping.asInstanceOf[BeanMapping[T]]
       }
-      val realClass = real_class(clazz)
-//      val classOfScalaObject = classOf[ScalaObject]
-//
-//      val mapping = if(classOfScalaObject.isAssignableFrom(realClass)) new ScalaBeanMapping(realClass)
-//      	else new JavaBeanMapping(realClass)
-      val mapping = new ScalaBeanMapping(realClass)
-      
-      G_BeanMappings(clazz) = new SoftReference(mapping)
-      return mapping.asInstanceOf[BeanMapping[T]]
     }
   }
-  
 }
 
 trait BeanMapping[E] {
@@ -108,14 +98,13 @@ trait BeanMapping[E] {
 
 }
 
-abstract class BaseBeanMapping[E](val reflectClass: Class[E]) extends BeanMapping[E] {
-  import BeanMapping._
 
-  val realClass = real_class(reflectClass)
-  val antTable = realClass.getAnnotation(classOf[Table])
+class UnionBeanMapping[E](val reflectClass: Class[E]) extends BeanMapping[E] {
+
+  val antTable = reflectClass.getAnnotation(classOf[Table])
   val catelog = if (antTable != null) antTable.catelog() else ""
   val tableName = if (antTable != null && antTable.value() != "") antTable.value()
-  else realClass.getSimpleName.toLowerCase
+  else reflectClass.getSimpleName.toLowerCase
 
   val fields = getMappingFields
   val idFields = fields.filter(_.isId)
@@ -146,46 +135,50 @@ abstract class BaseBeanMapping[E](val reflectClass: Class[E]) extends BeanMappin
     }
   }
 
-  def getMappingFields: List[FieldMapping[_]]
   def getFieldByName(name: String) = fieldsByName.get(name)
   def getFieldByColumnName(columnName:String) = fieldsByColumnName.get(columnName)
 
-}
-
-class ScalaBeanMapping[E](override val reflectClass: Class[E]) extends BaseBeanMapping(reflectClass) {
-  import BeanMapping._
-
+  /**
+   * support 2 styles mapping:
+   * 1. scala style. eg: name() for getter and name_=(arg) for setter
+   * 2. JavaBean Style. eg: getName()/isName() setName()
+   */
   def getMappingFields: List[FieldMapping[_]] = {
-    val methods = realClass.getMethods()
 
-    methods.flatMap { method =>
-      if (method.getParameterTypes().length == 0 && isSupportedDataType(method.getReturnType())) {
-        val setterName = method.getName() + "_$eq"
-        try {
-          val setter = realClass.getMethod(setterName, method.getReturnType)
-          val field = newFieldMapping(method.getName, method, setter)
-          Some(field)
-        } catch {
-          case ex: Throwable => None
-        }
-      }
-      else None
-    }.toList
+    val getters: Map[String, Method] = reflectClass.getMethods.filter { method =>
+      method.getParameterTypes.length == 0 && BeanMapping.isSupportedDataType(method.getReturnType)
+    }.map { method=> (method.getName, method)}.toMap
+
+    val setters: Map[String, Method] = reflectClass.getMethods.filter { method =>
+      method.getParameterTypes.length == 1 && BeanMapping.isSupportedDataType(method.getParameterTypes.apply(0)) &&
+        method.getReturnType == classOf[Void]
+    }.map{ method=> (method.getName, method)}.toMap
+
+    val mappings: Iterable[FieldMapping[_]] = getters.keys.flatMap { name =>
+
+      // style: name(), name_=(arg)
+      val scala = for( getter <- getters.get(name);
+        setter <- setters.get(name + "_$eq");
+        if(getter.getReturnType == setter.getParameterTypes.apply(0))
+      ) yield newFieldMapping(name, getter, setter)
+
+      // style: isName() setName(arg)
+      val is = for( getter <- getters.get(name) if name.startsWith("is") && getter.getReturnType == classOf[Boolean];
+        setter <- setters.get("set" + name.substring(2));
+        if(getter.getReturnType == setter.getParameterTypes.apply(0))
+      ) yield newFieldMapping(name.substring(2), getter, setter)
+
+      // style: getName() setName(arg)
+      val get = for( getter <- getters.get(name) if name.startsWith("get") ;
+           setter <- setters.get("set" + name.substring(3));
+           if(getter.getReturnType == setter.getParameterTypes.apply(0))
+      ) yield newFieldMapping(name.substring(3), getter, setter)
+
+      scala.orElse(is).orElse(get)
+    }
+
+    mappings.toList
 
   }
 
-}
-
-class JavaBeanMapping[E](override val reflectClass: Class[E]) extends BaseBeanMapping(reflectClass) {
-  import BeanMapping._
-  
-  def getMappingFields: List[FieldMapping[_]] = {
-    Introspector.getBeanInfo(realClass).getPropertyDescriptors.flatMap { pd =>
-      if(pd.getReadMethod() != null && pd.getWriteMethod() != null && isSupportedDataType(pd.getPropertyType()))
-    	Some(newFieldMapping(pd.getName, pd.getReadMethod, pd.getWriteMethod))
-      else None
-    }.toList
-  }
-    
-  
 }

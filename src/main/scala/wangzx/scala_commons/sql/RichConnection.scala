@@ -25,7 +25,7 @@ class RichConnection(conn: Connection) {
   /**
    * map a ResultSet to an object, either ResultSet or Row or JavaBean
    */
-  def rs2mapped[T <: AnyRef](rsMeta: ResultSetMetaData, rs: ResultSet, tag: ClassTag[T]): T = {
+  def rs2mapped[T](rsMeta: ResultSetMetaData, rs: ResultSet, tag: ClassTag[T]): T = {
     tag.runtimeClass match {
       case ClassOfResultSet => rs.asInstanceOf[T]
       case ClassOfRow => new Row(rsMeta, rs).asInstanceOf[T]
@@ -36,38 +36,38 @@ class RichConnection(conn: Connection) {
   /**
    * mapping from ResultSet to JavaBean, field is JavaBean Property, and may annotated with @Column
    */
-  def rs2bean[T <: AnyRef](rsMeta: ResultSetMetaData, rs: ResultSet)(implicit tag: ClassTag[T]): T = {
-    val bean: T = tag.runtimeClass.newInstance().asInstanceOf[T]
+  def rs2bean[T: ClassTag](rsMeta: ResultSetMetaData, rs: ResultSet): T = {
+    val bean: T = implicitly[ClassTag[T]].runtimeClass.newInstance().asInstanceOf[T]
 
-    if (bean.isInstanceOf[ResultSetConvertable]) {
-      bean.asInstanceOf[ResultSetConvertable].fromResultSet(rs)
-      return bean
-    }
-
-    val beanMaping = BeanMapping.getBeanMapping(bean.getClass).asInstanceOf[BeanMapping[T]]
-    for (idx <- 1 to rsMeta.getColumnCount) {
-      val label = rsMeta.getColumnLabel(idx).toLowerCase()
-      beanMaping.getFieldByColumnName(label) match {
-        case Some(fieldMaping) =>
-          val value = fieldMaping.fieldType match {
-            case java.lang.Boolean.TYPE | ClassOfBoolean => rs.getBoolean(idx)
-            case java.lang.Byte.TYPE | ClassOfByte => rs.getByte(idx)
-            case java.lang.Short.TYPE | ClassOfShort => rs.getShort(idx)
-            case java.lang.Integer.TYPE | ClassOfInteger => rs.getInt(idx)
-            case java.lang.Long.TYPE | ClassOfLong => rs.getLong(idx)
-            case java.lang.Float.TYPE | ClassOfFloat => rs.getFloat(idx)
-            case java.lang.Double.TYPE | ClassOfDouble => rs.getDouble(idx)
-            case ClassOfBigDecimal => rs.getBigDecimal(idx)
-            case ClassOfScalaBigDecimal => scala.math.BigDecimal(rs.getBigDecimal(idx))
-            case ClassOfSQLDate => rs.getDate(idx)
-            case ClassOfSQLTime => rs.getTime(idx)
-            case ClassOfSQLTimestamp | ClassOfUtilDate => rs.getTimestamp(idx)
-            case ClassOfString => rs.getString(idx)
-            case ClassOfByteArray => rs.getBytes(idx)
+    bean match {
+      case rsConvertable: ResultSetConvertable =>
+        rsConvertable.fromResultSet(rs)
+      case _ =>
+        val beanMapping = BeanMapping.getBeanMapping(bean.getClass).asInstanceOf[BeanMapping[T]]
+        for (idx <- 1 to rsMeta.getColumnCount) {
+          val label = rsMeta.getColumnLabel(idx).toLowerCase()
+          beanMapping.getFieldByColumnName(label) match {
+            case Some(fieldMapping) =>
+              val value = fieldMapping.fieldType match {
+                case java.lang.Boolean.TYPE | ClassOfBoolean => rs.getBoolean(idx)
+                case java.lang.Byte.TYPE | ClassOfByte => rs.getByte(idx)
+                case java.lang.Short.TYPE | ClassOfShort => rs.getShort(idx)
+                case java.lang.Integer.TYPE | ClassOfInteger => rs.getInt(idx)
+                case java.lang.Long.TYPE | ClassOfLong => rs.getLong(idx)
+                case java.lang.Float.TYPE | ClassOfFloat => rs.getFloat(idx)
+                case java.lang.Double.TYPE | ClassOfDouble => rs.getDouble(idx)
+                case ClassOfBigDecimal => rs.getBigDecimal(idx)
+                case ClassOfScalaBigDecimal => scala.math.BigDecimal(rs.getBigDecimal(idx))
+                case ClassOfSQLDate => rs.getDate(idx)
+                case ClassOfSQLTime => rs.getTime(idx)
+                case ClassOfSQLTimestamp | ClassOfUtilDate => rs.getTimestamp(idx)
+                case ClassOfString => rs.getString(idx)
+                case ClassOfByteArray => rs.getBytes(idx)
+              }
+              fieldMapping.asInstanceOf[beanMapping.FieldMapping[Any]].set(bean, value)
+            case None =>
           }
-          fieldMaping.asInstanceOf[beanMaping.FieldMapping[Any]].set(bean, value)
-        case _ =>
-      }
+        }
     }
 
     bean
@@ -116,7 +116,7 @@ class RichConnection(conn: Connection) {
     result
   }
 
-  def eachRow[T <: AnyRef](sql: SQLWithArgs)(f: T => Unit)(implicit ct: ClassTag[T]) {
+  def eachRow[T : ClassTag](sql: SQLWithArgs)(f: T => Unit) {
     val prepared = conn.prepareStatement(sql.sql)
     if (sql.args != null) {
       sql.args.zipWithIndex.foreach { case (v, idx) => prepared.setObject(idx + 1, v) }
@@ -124,12 +124,12 @@ class RichConnection(conn: Connection) {
     val rs = prepared.executeQuery()
     val rsMeta = rs.getMetaData
     while (rs.next()) {
-      val mapped = rs2mapped(rsMeta, rs, ct)
+      val mapped = rs2mapped(rsMeta, rs, implicitly[ClassTag[T]])
       f(mapped)
     }
   }
 
-  def rows[T <: AnyRef](sql: SQLWithArgs)(implicit ct: ClassTag[T]): List[T] = {
+  def rows[T : ClassTag](sql: SQLWithArgs): List[T] = {
     val buffer = new ListBuffer[T]()
     val prepared = conn.prepareStatement(sql.sql)
     if (sql.args != null) {
@@ -138,7 +138,7 @@ class RichConnection(conn: Connection) {
     val rs = prepared.executeQuery()
     val rsMeta = rs.getMetaData
     while (rs.next()) {
-      val mapped = rs2mapped(rsMeta, rs, ct)
+      val mapped = rs2mapped(rsMeta, rs, implicitly[ClassTag[T]])
       buffer += mapped
 
     }
@@ -160,7 +160,7 @@ class RichConnection(conn: Connection) {
   def insert[T](bean: T) {
     val beanMapping = BeanMapping.getBeanMapping(bean.getClass).asInstanceOf[BeanMapping[T]]
     val idColumns = beanMapping.idFields
-    val hasId = idColumns.exists { fieldMapping =>
+    val hasId = idColumns.forall { fieldMapping =>
       val value = fieldMapping.get(bean)
       
       (value != null) && (fieldMapping.fieldType match {
@@ -188,7 +188,7 @@ class RichConnection(conn: Connection) {
         if (rs.next) {
           idColumns.foreach { col =>
             val value = col.fieldType match {
-              case java.lang.Boolean.TYPE | ClassOfBoolean => rs.getBoolean(1)
+              case java.lang.Boolean.TYPE | ClassOfBoolean => rs.getBoolean(1)  // TODO number types support
               case _ => throw new AssertionError
             }
             col.asInstanceOf[beanMapping.FieldMapping[Any]].set(bean, value)
@@ -210,10 +210,12 @@ class RichConnection(conn: Connection) {
     }
   }
 
+  // id required
   def update(bean: AnyRef) {
 	  // TODO
   }
 
+  // id required
   def delete(bean: AnyRef) {
 	  // TODO
   }

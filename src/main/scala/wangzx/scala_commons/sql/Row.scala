@@ -39,6 +39,8 @@ object Row {
     def getAsciiStream: InputStream = ???
     def getBinaryStream: InputStream = ???
     def getObject: AnyRef = value.asInstanceOf[AnyRef]
+
+    override def toString = s"$name:$value"
   }
   class BooleanCell(name:String, sqlType: Int, value: Boolean) extends Cell(name, sqlType, value) {
     override def getBoolean = value
@@ -134,6 +136,8 @@ class Row(meta: ResultSetMetaData, rs: ResultSet) /* extends Dynamic */ {
   val cellsByName: Map[String, Cell[_]] = cells.map { cell =>
     (cell.name.toLowerCase, cell)
   }.toMap
+
+  override def toString = cells.map(_.toString).mkString("Row(", ",", ")")
 
   @inline private  def cell(index:Int) = cells(index-1)
   @inline private def cell(key: String) = cellsByName(key.toLowerCase)
