@@ -45,6 +45,8 @@ object SoftMap {
 
   new Thread("SoftMap-Cleaner") {
 
+    this.setDaemon(true)
+
     override def run(): Unit = {
       while (true) {
         queue.remove match {

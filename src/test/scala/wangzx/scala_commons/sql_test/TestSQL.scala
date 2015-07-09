@@ -10,7 +10,7 @@ object TestSQL {
 
   val datasource = {
     val ds = new org.h2.jdbcx.JdbcDataSource
-    ds.setURL("jdbc:h2:db/test")
+    ds.setURL("jdbc:h2:./db/test")
     ds.setUser("sa")
     ds.setPassword("")
     ds
@@ -58,6 +58,14 @@ object TestSQL {
     println("iterate students using ResultSet")
     datasource.eachRow(sql"select * from student where name = ${name}") { rs: ResultSet =>
       println(s"""name = ${rs.getString("name")} email = ${rs.getString("email")} birthday = ${rs.getDate("birthday")}""")
+    }
+    println()
+
+    val sharedSql = sql"""and mobile=${mobile}"""
+
+    println("iterate students using sharedSql")
+    datasource.eachRow(sql"select * from student where name = ${name} " + sharedSql + " and 1=1") { it: Student =>
+      println(s"name = ${it.name} email=${it.email} birthday=${it.birthday} mobile=${mobile}")
     }
     println()
 

@@ -2,9 +2,11 @@ organization := "com.github.wangzaixiang"
 
 name := "scala-sql"
 
-version := "1.0.0-beta"
+version := "1.0.3-SNAPSHOT"
 
-scalaVersion := "2.11.4"
+isSnapshot := true
+
+scalaVersion := "2.11.6"
 
 libraryDependencies +=
   "com.h2database" % "h2" % "1.4.184" % "test"
@@ -18,8 +20,6 @@ publishTo := {
   else
     Some("releases"  at nexus + "service/local/staging/deploy/maven2")
 }
-
-isSnapshot := false
 
 publishArtifact in Test := false
 

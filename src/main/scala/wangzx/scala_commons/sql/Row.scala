@@ -28,6 +28,8 @@ object Row {
       val long = getLong
       new JBigDecimal(long)
     }
+    def getScalaBigDecimal = BigDecimal(getBigDecimal)
+
     def getDate: java.sql.Date = ???
     def getTime: java.sql.Time = ???
     def getTimestamp: java.sql.Timestamp = ???
@@ -168,6 +170,9 @@ class Row(meta: ResultSetMetaData, rs: ResultSet) /* extends Dynamic */ {
 
   def getBigDecimal(index: Int): java.math.BigDecimal = cell(index).getBigDecimal
   def getBigDecimal(key: String): java.math.BigDecimal = cell(key).getBigDecimal
+
+  def getScalaBigDecimal(index: Int): BigDecimal = cell(index).getScalaBigDecimal
+  def getScalaBigDecimal(key: String): BigDecimal = cell(key).getScalaBigDecimal
 
   def getDate(index: Int): java.sql.Date = cell(index).getDate
   def getDate(key: String): java.sql.Date = cell(key).getDate

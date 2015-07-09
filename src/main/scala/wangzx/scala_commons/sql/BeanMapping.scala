@@ -151,7 +151,7 @@ class UnionBeanMapping[E](val reflectClass: Class[E]) extends BeanMapping[E] {
 
     val setters: Map[String, Method] = reflectClass.getMethods.filter { method =>
       method.getParameterTypes.length == 1 && BeanMapping.isSupportedDataType(method.getParameterTypes.apply(0)) &&
-        method.getReturnType == classOf[Void]
+        method.getReturnType == Void.TYPE
     }.map{ method=> (method.getName, method)}.toMap
 
     val mappings: Iterable[FieldMapping[_]] = getters.keys.flatMap { name =>
