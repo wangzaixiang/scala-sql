@@ -20,7 +20,7 @@ package object sql {
 
 package sql {
 
-  case class SQLWithArgs(sql: String, args: Seq[Any]) {
+case class SQLWithArgs(sql: String, args: Seq[Any]) {
 
     def +(other: SQLWithArgs): SQLWithArgs =
       SQLWithArgs(sql + other.sql, args ++ other.args)

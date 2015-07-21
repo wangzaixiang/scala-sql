@@ -8,7 +8,7 @@ import java.lang.annotation.Target;
 /**
  * mark a field is id or part of id
  */
-@Target(ElementType.FIELD)
+@Target({ElementType.FIELD, ElementType.METHOD})
 @Retention(RetentionPolicy.RUNTIME)
 public @interface Id {
 

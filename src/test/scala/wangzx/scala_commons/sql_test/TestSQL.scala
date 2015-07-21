@@ -4,6 +4,7 @@ import java.sql.{Date, ResultSet}
 
 import wangzx.scala_commons.sql._
 
+import scala.annotation.meta.getter
 import scala.util.Random
 
 object TestSQL {
@@ -21,7 +22,9 @@ object TestSQL {
     var name: String = _
     var email: String = _
     var birthday: Date = _
-    var mobile: String = _
+
+    @Column(name="mobile")
+    var phone: String = _
   }
 
   def main(args: Array[String]) {
@@ -47,7 +50,7 @@ object TestSQL {
       name = "wangzx"
       email = s"wangzx${Random.nextInt}@gmail.com"
       birthday = Date.valueOf("2000-01-01")
-      mobile = "18612345678"
+      phone = "18612345679"
     }
     datasource.insert(student)
     
@@ -57,7 +60,7 @@ object TestSQL {
 
     println("iterate students using ResultSet")
     datasource.eachRow(sql"select * from student where name = ${name}") { rs: ResultSet =>
-      println(s"""name = ${rs.getString("name")} email = ${rs.getString("email")} birthday = ${rs.getDate("birthday")}""")
+      println(s"""name = ${rs.getString("name")} email = ${rs.getString("email")} birthday = ${rs.getDate("birthday")} mobile=${rs.getString("mobile")}""")
     }
     println()
 

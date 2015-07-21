@@ -115,14 +115,15 @@ class UnionBeanMapping[E](val reflectClass: Class[E]) extends BeanMapping[E] {
     (field.columnName, field)
   }.toMap
 
-  private def getAnnotation[T <: Annotation](annotationType: Class[T], getter: Method, setter: Method): T =
+  private def getAnnotation[T <: Annotation](annotationType: Class[T], getter: Method, setter: Method, fall: java.lang.reflect.Field): T =
     if (getter.isAnnotationPresent(annotationType)) getter.getAnnotation(annotationType)
     else if (setter.isAnnotationPresent(annotationType)) setter.getAnnotation(annotationType)
+    else if(fall != null && fall.isAnnotationPresent(annotationType)) fall.getAnnotation(annotationType)
     else null.asInstanceOf[T]
 
-  def newFieldMapping[T](name: String, getter: Method, setter: Method): FieldMapping[T] = new FieldMapping[T] {
-    val antColumn = getAnnotation(classOf[Column], getter, setter)
-    val antId = getAnnotation(classOf[Id], getter, setter)
+  def newFieldMapping[T](name: String, getter: Method, setter: Method, fallField: java.lang.reflect.Field): FieldMapping[T] = new FieldMapping[T] {
+    val antColumn = getAnnotation(classOf[Column], getter, setter, fallField)
+    val antId = getAnnotation(classOf[Id], getter, setter, fallField)
     val fieldType = getter.getReturnType.asInstanceOf[Class[T]]
     val fieldName = name
     val columnName = if (antColumn != null && antColumn.name != "") antColumn.name else fieldName
@@ -154,25 +155,30 @@ class UnionBeanMapping[E](val reflectClass: Class[E]) extends BeanMapping[E] {
         method.getReturnType == Void.TYPE
     }.map{ method=> (method.getName, method)}.toMap
 
+    def getField(name: String): java.lang.reflect.Field =
+      try { reflectClass.getDeclaredField(name) }
+      catch { case ex => null }
+
     val mappings: Iterable[FieldMapping[_]] = getters.keys.flatMap { name =>
+
 
       // style: name(), name_=(arg)
       val scala = for( getter <- getters.get(name);
         setter <- setters.get(name + "_$eq");
         if(getter.getReturnType == setter.getParameterTypes.apply(0))
-      ) yield newFieldMapping(name, getter, setter)
+      ) yield newFieldMapping(name, getter, setter, getField(name))
 
       // style: isName() setName(arg)
       val is = for( getter <- getters.get(name) if name.startsWith("is") && getter.getReturnType == classOf[Boolean];
         setter <- setters.get("set" + name.substring(2));
         if(getter.getReturnType == setter.getParameterTypes.apply(0))
-      ) yield newFieldMapping(name.substring(2), getter, setter)
+      ) yield newFieldMapping(name.substring(2), getter, setter, getField(name))
 
       // style: getName() setName(arg)
       val get = for( getter <- getters.get(name) if name.startsWith("get") ;
            setter <- setters.get("set" + name.substring(3));
            if(getter.getReturnType == setter.getParameterTypes.apply(0))
-      ) yield newFieldMapping(name.substring(3), getter, setter)
+      ) yield newFieldMapping(name.substring(3), getter, setter, getField(name))
 
       scala.orElse(is).orElse(get)
     }
