@@ -4,8 +4,6 @@ name := "scala-sql"
 
 version := "1.0.3-SNAPSHOT"
 
-isSnapshot := true
-
 scalaVersion := "2.11.6"
 
 libraryDependencies +=
@@ -15,7 +13,7 @@ publishMavenStyle := true
 
 publishTo := {
   val nexus = "https://oss.sonatype.org/"
-  if (isSnapshot.value)
+  if (version.value.endsWith("SNAPSHOT"))
     Some("snapshots" at nexus + "content/repositories/snapshots")
   else
     Some("releases"  at nexus + "service/local/staging/deploy/maven2")

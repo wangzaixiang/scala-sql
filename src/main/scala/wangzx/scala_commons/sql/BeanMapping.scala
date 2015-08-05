@@ -53,7 +53,7 @@ object BeanMapping {
     case ClassOfSQLTimestamp | ClassOfUtilDate => true
     case ClassOfString => true
     case ClassOfByteArray => true
-    case _ => false
+    case _ => classOf[JdbcValue].isAssignableFrom(typ)
   }
 
   def getBeanMapping[T](clazz: Class[T]): BeanMapping[T] = {

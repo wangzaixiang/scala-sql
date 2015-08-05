@@ -20,13 +20,19 @@ package object sql {
 
 package sql {
 
-case class SQLWithArgs(sql: String, args: Seq[Any]) {
+  case class SQLWithArgs(sql: String, args: Seq[Any]) {
 
     def +(other: SQLWithArgs): SQLWithArgs =
       SQLWithArgs(sql + other.sql, args ++ other.args)
 
     def +(other: String): SQLWithArgs = SQLWithArgs(sql + other, args)
 
+  }
+
+  // when pass a JdbcValue to sql as placeholder, we will call it's getJdbcValue
+  // which should be JDBC compatiable, see java.sql.Types
+  trait JdbcValue {
+    def getJdbcValue: AnyVal
   }
 
   class SQLStringContext(sc: StringContext) {

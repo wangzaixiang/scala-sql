@@ -14,7 +14,7 @@ import scala.reflect.ClassTag
  */
 object Row {
 
-  abstract class Cell[T](val name: String, val sqltype: Int, val value: T) {
+  sealed abstract class Cell[T](val name: String, val sqltype: Int, val value: T) {
     def ??? = throw new UnsupportedOperationException
     def getString: String = if (value == null) null else value.toString
     def getLong: Long  = ???
@@ -107,43 +107,46 @@ object Row {
     override def getBytes = null
   }
 
-}
+  def resultSetToRow(meta: ResultSetMetaData, rs: ResultSet): Row = {
+    val cells: Seq[Cell[_]] = {
+      for (i <- 1 to meta.getColumnCount) yield {
+        val name = meta.getColumnLabel(i)
+        val sqltype = meta.getColumnType(i)
+        val isnull = rs.getObject(i) == null
 
-class Row(meta: ResultSetMetaData, rs: ResultSet) /* extends Dynamic */ {
-  import Row._
-
-  val cells: Seq[Cell[_]] = {
-    for (i <- 1 to meta.getColumnCount) yield {
-      val name = meta.getColumnLabel(i)
-      val sqltype = meta.getColumnType(i)
-      val isnull = rs.getObject(i) == null
-
-      if (isnull) new NullCell(name, sqltype)
-      else sqltype match {
-        case Types.DECIMAL | Types.NUMERIC => new BigDecimalCell(name, sqltype, rs.getBigDecimal(i))
-        case Types.BINARY | Types.BLOB | Types.LONGVARBINARY | Types.VARBINARY => new BytesCell(name, sqltype, rs.getBytes(i))
-        case Types.BIT | Types.BOOLEAN => new BooleanCell(name, sqltype, rs.getBoolean(i))
-        case Types.CLOB | Types.NCLOB | Types.CHAR | Types.NCHAR | Types.VARCHAR | Types.NVARCHAR | Types.LONGNVARCHAR | Types.LONGVARCHAR =>
-          new StringCell(name, sqltype, rs.getString(i))
-        case Types.DATE => new DateCell(name, sqltype, rs.getDate(i))
-        case Types.FLOAT => new FloatCell(name, sqltype, rs.getFloat(i))
-        case Types.DOUBLE | Types.REAL => new DoubleCell(name, sqltype, rs.getDouble(i))
-        case Types.TINYINT | Types.SMALLINT | Types.INTEGER | Types.BIGINT => new LongCell(name, sqltype, rs.getLong(i))
-        case Types.TIME => new TimeCell(name, sqltype, rs.getTime(i))
-        case Types.TIMESTAMP => new TimestampCell(name, sqltype, rs.getTimestamp(i))
+        if (isnull) new NullCell(name, sqltype)
+        else sqltype match {
+          case Types.DECIMAL | Types.NUMERIC => new BigDecimalCell(name, sqltype, rs.getBigDecimal(i))
+          case Types.BINARY | Types.BLOB | Types.LONGVARBINARY | Types.VARBINARY => new BytesCell(name, sqltype, rs.getBytes(i))
+          case Types.BIT | Types.BOOLEAN => new BooleanCell(name, sqltype, rs.getBoolean(i))
+          case Types.CLOB | Types.NCLOB | Types.CHAR | Types.NCHAR | Types.VARCHAR | Types.NVARCHAR | Types.LONGNVARCHAR | Types.LONGVARCHAR =>
+            new StringCell(name, sqltype, rs.getString(i))
+          case Types.DATE => new DateCell(name, sqltype, rs.getDate(i))
+          case Types.FLOAT => new FloatCell(name, sqltype, rs.getFloat(i))
+          case Types.DOUBLE | Types.REAL => new DoubleCell(name, sqltype, rs.getDouble(i))
+          case Types.TINYINT | Types.SMALLINT | Types.INTEGER | Types.BIGINT => new LongCell(name, sqltype, rs.getLong(i))
+          case Types.TIME => new TimeCell(name, sqltype, rs.getTime(i))
+          case Types.TIMESTAMP => new TimestampCell(name, sqltype, rs.getTimestamp(i))
+        }
       }
     }
+    new Row(cells)
   }
 
-  val cellsByName: Map[String, Cell[_]] = cells.map { cell =>
+}
+
+class Row(val cells: Seq[Row.Cell[_]]) {
+  import Row._
+
+  private lazy val cellsByName: Map[String, Cell[_]] = cells.map { cell =>
     (cell.name.toLowerCase, cell)
   }.toMap
 
   override def toString = cells.map(_.toString).mkString("Row(", ",", ")")
 
-  @inline private  def cell(index:Int) = cells(index-1)
-  @inline private def cell(key: String) = cellsByName(key.toLowerCase)
-  
+  @inline def cell(index:Int) = cells(index-1)
+  @inline def cell(key: String) = cellsByName(key.toLowerCase)
+
   def getString(index: Int): String = cell(index).getString
   def getString(key: String): String = cell(key).getString
 
@@ -194,5 +197,7 @@ class Row(meta: ResultSetMetaData, rs: ResultSet) /* extends Dynamic */ {
 
   def getObject(index: Int): AnyRef = cell(index).getObject
   def getObject(key: String): AnyRef = cell(key).getObject
-  
+
+
 }
+

@@ -1,9 +1,6 @@
 package wangzx.scala_commons.sql
 
-import java.sql.Connection
-import java.sql.ResultSet
-import java.sql.ResultSetMetaData
-import java.sql.Statement
+import java.sql._
 import scala.reflect.ClassTag
 import scala.collection.mutable.ListBuffer
 import java.beans.PropertyDescriptor
@@ -25,16 +22,17 @@ class RichConnection(conn: Connection) {
   /**
    * map a ResultSet to an object, either ResultSet or Row or JavaBean
    */
-  def rs2mapped[T](rsMeta: ResultSetMetaData, rs: ResultSet, tag: ClassTag[T]): T = {
+  private def rs2mapped[T](rsMeta: ResultSetMetaData, rs: ResultSet, tag: ClassTag[T]): T = {
     tag.runtimeClass match {
       case ClassOfResultSet => rs.asInstanceOf[T]
-      case ClassOfRow => new Row(rsMeta, rs).asInstanceOf[T]
+      case ClassOfRow => Row.resultSetToRow(rsMeta, rs).asInstanceOf[T]
       case _ => rs2bean(rsMeta, rs)(tag)
     }
   }
 
   /**
    * mapping from ResultSet to JavaBean, field is JavaBean Property, and may annotated with @Column
+   * TODO support JdbcValue such as enums.
    */
   def rs2bean[T: ClassTag](rsMeta: ResultSetMetaData, rs: ResultSet): T = {
     val bean: T = implicitly[ClassTag[T]].runtimeClass.newInstance().asInstanceOf[T]
@@ -95,17 +93,21 @@ class RichConnection(conn: Connection) {
     }
   }
 
-  def executeUpdate(stmt: SQLWithArgs): Int =
-    executeUpdateWithGenerateKey(stmt)(null)
+  def executeUpdate(stmt: SQLWithArgs): Int = executeUpdateWithGenerateKey(stmt)(null)
+
+  @inline private def setStatementArgs(stmt: PreparedStatement, args: Seq[Any]) =
+    args.zipWithIndex.foreach {
+      case (v: JdbcValue, idx) => stmt.setObject(idx+1, v.getJdbcValue)
+      case (v, idx) => stmt.setObject(idx + 1, v)
+    }
 
   def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(processGenerateKeys: ResultSet => Unit = null): Int = {
     val prepared = conn.prepareStatement(stmt.sql,
       if (processGenerateKeys != null) Statement.RETURN_GENERATED_KEYS
       else Statement.NO_GENERATED_KEYS)
 
-    if (stmt.args != null) {
-      stmt.args.zipWithIndex.foreach { case (v, idx) => prepared.setObject(idx + 1, v) }
-    }
+    if (stmt.args != null) setStatementArgs(prepared, stmt.args)
+
     val result = prepared.executeUpdate()
 
     if (processGenerateKeys != null) {
@@ -118,9 +120,8 @@ class RichConnection(conn: Connection) {
 
   def eachRow[T : ClassTag](sql: SQLWithArgs)(f: T => Unit) {
     val prepared = conn.prepareStatement(sql.sql)
-    if (sql.args != null) {
-      sql.args.zipWithIndex.foreach { case (v, idx) => prepared.setObject(idx + 1, v) }
-    }
+    if (sql.args != null) setStatementArgs(prepared, sql.args)
+
     val rs = prepared.executeQuery()
     val rsMeta = rs.getMetaData
     while (rs.next()) {
@@ -132,9 +133,8 @@ class RichConnection(conn: Connection) {
   def rows[T : ClassTag](sql: SQLWithArgs): List[T] = {
     val buffer = new ListBuffer[T]()
     val prepared = conn.prepareStatement(sql.sql)
-    if (sql.args != null) {
-      sql.args.zipWithIndex.foreach { case (v, idx) => prepared.setObject(idx + 1, v) }
-    }
+    if (sql.args != null) setStatementArgs(prepared, sql.args)
+
     val rs = prepared.executeQuery()
     val rsMeta = rs.getMetaData
     while (rs.next()) {
@@ -147,8 +147,7 @@ class RichConnection(conn: Connection) {
 
   def queryInt(sql: SQLWithArgs): Int = {
     val prepared = conn.prepareStatement(sql.sql)
-    if(sql.args != null)
-      sql.args.zipWithIndex.foreach { case (v, idx) => prepared.setObject(idx+1, v) }
+    if(sql.args != null) setStatementArgs(prepared, sql.args)
 
     val rs = prepared.executeQuery()
 
