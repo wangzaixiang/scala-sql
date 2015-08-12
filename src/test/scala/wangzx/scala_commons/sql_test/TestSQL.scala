@@ -19,6 +19,7 @@ object TestSQL {
 
   @Table("student")
   class Student {
+
     var name: String = _
     var email: String = _
     var birthday: Date = _

@@ -71,6 +71,37 @@ object BeanMapping {
       }
     }
   }
+
+  def mappingCamelToUnderscore(camelName: String): String = {
+    val builder = StringBuilder.newBuilder
+
+    var pos = 0
+    var isLastUpper = false
+
+    assert(camelName.length >= 1)
+
+    var first = camelName.charAt(0)
+    builder.append(first)
+    isLastUpper = first >= 'A' && first <= 'Z'
+
+    pos += 1
+    while(pos < camelName.length){
+      var ch = camelName.charAt(pos)
+      if(ch >= 'A' && ch <= 'Z') {
+        val lower: Char = (ch + 'a' - 'A').toChar
+        if(isLastUpper == false) builder.append('_').append(lower)
+        else builder.append(lower)
+        isLastUpper = true
+      }
+      else {
+        builder.append(ch)
+        isLastUpper = false
+      }
+      pos += 1
+    }
+    builder.toString
+  }
+
 }
 
 trait BeanMapping[E] {
@@ -90,6 +121,7 @@ trait BeanMapping[E] {
   val reflectClass: Class[E]
   val catelog: String
   val tableName: String
+  val camelToUnderscore: Boolean
   val fields: List[FieldMapping[_]]
   val idFields: List[FieldMapping[_]]
   
@@ -101,10 +133,14 @@ trait BeanMapping[E] {
 
 class UnionBeanMapping[E](val reflectClass: Class[E]) extends BeanMapping[E] {
 
+  trait TmpFieldMapping[F] extends FieldMapping[F] {
+    val isTransient: Boolean
+  }
   val antTable = reflectClass.getAnnotation(classOf[Table])
   val catelog = if (antTable != null) antTable.catelog() else ""
   val tableName = if (antTable != null && antTable.value() != "") antTable.value()
-  else reflectClass.getSimpleName.toLowerCase
+    else reflectClass.getSimpleName.toLowerCase
+  val camelToUnderscore = if(antTable != null) antTable.camelToUnderscore() else false
 
   val fields = getMappingFields
   val idFields = fields.filter(_.isId)
@@ -121,12 +157,15 @@ class UnionBeanMapping[E](val reflectClass: Class[E]) extends BeanMapping[E] {
     else if(fall != null && fall.isAnnotationPresent(annotationType)) fall.getAnnotation(annotationType)
     else null.asInstanceOf[T]
 
-  def newFieldMapping[T](name: String, getter: Method, setter: Method, fallField: java.lang.reflect.Field): FieldMapping[T] = new FieldMapping[T] {
+  private def newFieldMapping[T](name: String, getter: Method, setter: Method, fallField: java.lang.reflect.Field): TmpFieldMapping[T] = new TmpFieldMapping[T] {
     val antColumn = getAnnotation(classOf[Column], getter, setter, fallField)
     val antId = getAnnotation(classOf[Id], getter, setter, fallField)
     val fieldType = getter.getReturnType.asInstanceOf[Class[T]]
     val fieldName = name
-    val columnName = if (antColumn != null && antColumn.name != "") antColumn.name else fieldName
+    val columnName = if (antColumn != null && antColumn.name != "") antColumn.name
+      else if(camelToUnderscore) BeanMapping.mappingCamelToUnderscore(fieldName)
+      else fieldName
+    val isTransient = if(antColumn != null ) antColumn.isTransient else false
     val isId = antId != null
     val isAutoIncrement = (antId != null && antId.auto)
 
@@ -135,6 +174,8 @@ class UnionBeanMapping[E](val reflectClass: Class[E]) extends BeanMapping[E] {
       setter.invoke(bean, value.asInstanceOf[AnyRef])
     }
   }
+
+
 
   def getFieldByName(name: String) = fieldsByName.get(name)
   def getFieldByColumnName(columnName:String) = fieldsByColumnName.get(columnName)
@@ -159,7 +200,7 @@ class UnionBeanMapping[E](val reflectClass: Class[E]) extends BeanMapping[E] {
       try { reflectClass.getDeclaredField(name) }
       catch { case ex => null }
 
-    val mappings: Iterable[FieldMapping[_]] = getters.keys.flatMap { name =>
+    val mappings: Iterable[TmpFieldMapping[_]] = getters.keys.flatMap { name =>
 
 
       // style: name(), name_=(arg)
@@ -180,10 +221,11 @@ class UnionBeanMapping[E](val reflectClass: Class[E]) extends BeanMapping[E] {
            if(getter.getReturnType == setter.getParameterTypes.apply(0))
       ) yield newFieldMapping(name.substring(3), getter, setter, getField(name))
 
+      //
       scala.orElse(is).orElse(get)
     }
 
-    mappings.toList
+    mappings.toList.filter( _.isTransient == false )
 
   }
 

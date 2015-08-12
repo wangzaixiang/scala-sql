@@ -14,4 +14,10 @@ public @interface Table {
 	String value() default "";
 	
 	String catelog() default "";
+
+	/**
+	 * mapping userName to user_name
+	 * @return
+	 */
+	boolean camelToUnderscore() default false;
 }
