@@ -17,6 +17,25 @@ object TestSQL {
     ds
   }
 
+  case class StudentType(val `type`: Int)
+
+  object StudentTypeMapper {
+
+    def toJdbcValue(t: StudentType) = t.`type`
+    def toBeanValue(t: AnyRef) = t match {
+      case x: Number => StudentType(x.intValue)
+    }
+
+  }
+
+  implicit object MyJdbcValueMapperFactory extends JdbcValueMapperFactory {
+    def getJdbcValueMapper[T](`type`: Class[T]): JdbcValueMapper[T] = `type` match {
+      case x if x == classOf[StudentType] => StudentTypeMapper.asInstanceOf
+      case _ => null
+    }
+  }
+
+
   @Table("student")
   class Student {
 

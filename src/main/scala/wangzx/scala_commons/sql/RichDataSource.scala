@@ -4,7 +4,7 @@ import java.sql._
 import javax.sql.DataSource
 import scala.reflect.ClassTag
 
-class RichDataSource(datasource: DataSource) {
+class RichDataSource(datasource: DataSource)(implicit jdbcValueMapperFactory: JdbcValueMapperFactory) {
 
   def withConnection[T](f: Connection => T): T = {
     val conn = datasource.getConnection

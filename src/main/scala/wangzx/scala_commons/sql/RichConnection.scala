@@ -3,18 +3,18 @@ package wangzx.scala_commons.sql
 import java.sql._
 import scala.reflect.ClassTag
 import scala.collection.mutable.ListBuffer
-import java.beans.PropertyDescriptor
-import java.lang.reflect.Field
-import java.lang.reflect.Modifier
-import scala.ref.SoftReference
 
 object RichConnection {
   val ClassOfResultSet = classOf[ResultSet]
   val ClassOfRow = classOf[Row]
+  val ClassOfJdbcValueMapping = classOf[JdbcValueMapper[_]]
+
+  import org.slf4j.{LoggerFactory, Logger}
+  val LOG: Logger = LoggerFactory.getLogger(classOf[RichConnection])
 
 }
 
-class RichConnection(conn: Connection) {
+class RichConnection(conn: Connection)(jdbcValueMapperFactory: JdbcValueMapperFactory) {
 
   import RichConnection._
   import BeanMapping._
@@ -24,51 +24,13 @@ class RichConnection(conn: Connection) {
    */
   private def rs2mapped[T](rsMeta: ResultSetMetaData, rs: ResultSet, tag: ClassTag[T]): T = {
     tag.runtimeClass match {
-      case ClassOfResultSet => rs.asInstanceOf[T]
-      case ClassOfRow => Row.resultSetToRow(rsMeta, rs).asInstanceOf[T]
-      case _ => rs2bean(rsMeta, rs)(tag)
-    }
-  }
-
-  /**
-   * mapping from ResultSet to JavaBean, field is JavaBean Property, and may annotated with @Column
-   * TODO support JdbcValue such as enums.
-   */
-  def rs2bean[T: ClassTag](rsMeta: ResultSetMetaData, rs: ResultSet): T = {
-    val bean: T = implicitly[ClassTag[T]].runtimeClass.newInstance().asInstanceOf[T]
-
-    bean match {
-      case rsConvertable: ResultSetConvertable =>
-        rsConvertable.fromResultSet(rs)
+      case ClassOfResultSet =>
+        rs.asInstanceOf[T]
+      case ClassOfRow =>
+        Row.resultSetToRow(rsMeta, rs).asInstanceOf[T]
       case _ =>
-        val beanMapping = BeanMapping.getBeanMapping(bean.getClass).asInstanceOf[BeanMapping[T]]
-        for (idx <- 1 to rsMeta.getColumnCount) {
-          val label = rsMeta.getColumnLabel(idx).toLowerCase()
-          beanMapping.getFieldByColumnName(label) match {
-            case Some(fieldMapping) =>
-              val value = fieldMapping.fieldType match {
-                case java.lang.Boolean.TYPE | ClassOfBoolean => rs.getBoolean(idx)
-                case java.lang.Byte.TYPE | ClassOfByte => rs.getByte(idx)
-                case java.lang.Short.TYPE | ClassOfShort => rs.getShort(idx)
-                case java.lang.Integer.TYPE | ClassOfInteger => rs.getInt(idx)
-                case java.lang.Long.TYPE | ClassOfLong => rs.getLong(idx)
-                case java.lang.Float.TYPE | ClassOfFloat => rs.getFloat(idx)
-                case java.lang.Double.TYPE | ClassOfDouble => rs.getDouble(idx)
-                case ClassOfBigDecimal => rs.getBigDecimal(idx)
-                case ClassOfScalaBigDecimal => scala.math.BigDecimal(rs.getBigDecimal(idx))
-                case ClassOfSQLDate => rs.getDate(idx)
-                case ClassOfSQLTime => rs.getTime(idx)
-                case ClassOfSQLTimestamp | ClassOfUtilDate => rs.getTimestamp(idx)
-                case ClassOfString => rs.getString(idx)
-                case ClassOfByteArray => rs.getBytes(idx)
-              }
-              fieldMapping.asInstanceOf[beanMapping.FieldMapping[Any]].set(bean, value)
-            case None =>
-          }
-        }
+        BeanMapping.rs2bean(rsMeta, rs, jdbcValueMapperFactory)(tag)
     }
-
-    bean
   }
 
   def withStatement[T](f: Statement => T): T = {
@@ -97,7 +59,11 @@ class RichConnection(conn: Connection) {
 
   @inline private def setStatementArgs(stmt: PreparedStatement, args: Seq[Any]) =
     args.zipWithIndex.foreach {
-      case (v: JdbcValue, idx) => stmt.setObject(idx+1, v.getJdbcValue)
+      case (v: JdbcValueMapper[AnyRef], idx) => stmt.setObject(idx+1, v.getJdbcValue(v))
+      case (v, idx) if jdbcValueMapperFactory.getJdbcValueMapper(v.getClass) != null =>
+        val mapper = jdbcValueMapperFactory.getJdbcValueMapper(v.getClass).asInstanceOf[JdbcValueMapper[Any]]
+        stmt.setObject( idx+1, mapper.getJdbcValue(v) )
+      case (v: BigDecimal, idx) => stmt.setBigDecimal(idx+1, v.bigDecimal)
       case (v, idx) => stmt.setObject(idx + 1, v)
     }
 
@@ -108,6 +74,8 @@ class RichConnection(conn: Connection) {
 
     if (stmt.args != null) setStatementArgs(prepared, stmt.args)
 
+    LOG.debug("SQL Preparing: {} args: {}", Seq(stmt.sql, stmt.args): _*)
+
     val result = prepared.executeUpdate()
 
     if (processGenerateKeys != null) {
@@ -115,6 +83,7 @@ class RichConnection(conn: Connection) {
       processGenerateKeys(keys)
     }
 
+    LOG.debug("SQL result: {}", result)
     result
   }
 
@@ -122,18 +91,23 @@ class RichConnection(conn: Connection) {
     val prepared = conn.prepareStatement(sql.sql)
     if (sql.args != null) setStatementArgs(prepared, sql.args)
 
+    LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args):_*)
+
     val rs = prepared.executeQuery()
     val rsMeta = rs.getMetaData
     while (rs.next()) {
       val mapped = rs2mapped(rsMeta, rs, implicitly[ClassTag[T]])
       f(mapped)
     }
+    LOG.debug("SQL result: {}", rs.getRow)
   }
 
   def rows[T : ClassTag](sql: SQLWithArgs): List[T] = {
     val buffer = new ListBuffer[T]()
     val prepared = conn.prepareStatement(sql.sql)
     if (sql.args != null) setStatementArgs(prepared, sql.args)
+
+    LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args):_*)
 
     val rs = prepared.executeQuery()
     val rsMeta = rs.getMetaData
@@ -142,12 +116,15 @@ class RichConnection(conn: Connection) {
       buffer += mapped
 
     }
+    LOG.debug("SQL result: {}", buffer.size)
     buffer.toList
   }
 
   def queryInt(sql: SQLWithArgs): Int = {
     val prepared = conn.prepareStatement(sql.sql)
     if(sql.args != null) setStatementArgs(prepared, sql.args)
+
+    LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args):_*)
 
     val rs = prepared.executeQuery()
 
@@ -156,8 +133,9 @@ class RichConnection(conn: Connection) {
     } else throw new IllegalArgumentException("query return no rows")
   }
 
-  def insert[T](bean: T) {
-    val beanMapping = BeanMapping.getBeanMapping(bean.getClass).asInstanceOf[BeanMapping[T]]
+  // TODO the following method insert/update/delete will move away
+  def insert[T](bean: T, excludeColumns: List[String] = Nil) {
+    val beanMapping = BeanMapping.getBeanMapping(bean.getClass)(jdbcValueMapperFactory).asInstanceOf[BeanMapping[T]]
     val idColumns = beanMapping.idFields
     val hasId = idColumns.forall { fieldMapping =>
       val value = fieldMapping.get(bean)
@@ -176,6 +154,7 @@ class RichConnection(conn: Connection) {
 
     if (!hasId) { // try auto generate
       val fields = beanMapping.fields.filterNot(_.isId)
+        .filterNot(excludeColumns != Nil && excludeColumns.contains(_))
       val sql = "insert into " +
         (if (beanMapping.catelog != null && beanMapping.catelog != "") beanMapping.catelog + "." else "") +
         beanMapping.tableName + "(" +
@@ -188,6 +167,7 @@ class RichConnection(conn: Connection) {
           idColumns.foreach { col =>
             val value = col.fieldType match {
               case java.lang.Boolean.TYPE | ClassOfBoolean => rs.getBoolean(1)  // TODO number types support
+              case java.lang.Integer.TYPE | ClassOfInteger => rs.getInt(1)
               case _ => throw new AssertionError
             }
             col.asInstanceOf[beanMapping.FieldMapping[Any]].set(bean, value)
@@ -198,6 +178,7 @@ class RichConnection(conn: Connection) {
     } else {
 
       val fields = beanMapping.fields
+          .filterNot(excludeColumns != Nil && excludeColumns.contains(_))
       val sql = "insert into " +
         (if (beanMapping.catelog != null && beanMapping.catelog != "") beanMapping.catelog + "." else "") +
         beanMapping.tableName + "(" +
@@ -209,14 +190,86 @@ class RichConnection(conn: Connection) {
     }
   }
 
+
   // id required
-  def update(bean: AnyRef) {
-	  // TODO
+  implicit def update(bean: AnyRef, ignoreNullField: Boolean = true, ignoreEmptyField: Boolean = true, includeColumns: List[String] = Nil) {
+    val beanMapping = BeanMapping.getBeanMapping(bean.getClass)(jdbcValueMapperFactory).asInstanceOf[BeanMapping[AnyRef]]
+    val idColumns = beanMapping.idFields
+    val hasId = idColumns.forall { fieldMapping =>
+      val value = fieldMapping.get(bean)
+
+      (value != null) && (fieldMapping.fieldType match {
+        case java.lang.Integer.TYPE | ClassOfInteger | java.lang.Short.TYPE | ClassOfShort |
+             java.lang.Long.TYPE | ClassOfLong  =>
+          value.asInstanceOf[Number].longValue != 0
+        case ClassOfBigDecimal =>
+          value.asInstanceOf[java.math.BigDecimal].longValue != 0
+        case ClassOfScalaBigDecimal =>
+          value.asInstanceOf[scala.math.BigDecimal].longValue != 0
+        case _ => true
+      })
+    }
+
+    def isNull(t: Any): Boolean = t == null || t == None || t == Nil
+    def isEmpty(t: Any): Boolean = isNull(t) ||
+      (t match {
+        case n : Number => n == 0
+        case "" => true
+        case _ => false
+      })
+
+    if (!hasId) throw new AssertionError("bean's id field is not setted")
+
+    val ids = beanMapping.fields.filter(_.isId)
+    val fields = beanMapping.fields.filterNot(_.isId)
+      .filterNot(x => ignoreNullField && isNull(x.get(bean)) )
+      .filterNot(x => ignoreEmptyField && isEmpty(x.get(bean)) )
+      .filterNot(x => includeColumns != Nil && !includeColumns.contains(x.columnName) )
+
+    val sql = "update " +
+      (if (beanMapping.catelog != null && beanMapping.catelog != "") beanMapping.catelog + "." else "") +
+      beanMapping.tableName + " set " +
+      (for(field <- fields) yield field.columnName + " = ? ").mkString(",") +
+      " where " +
+      (for(id <- ids) yield id.columnName + " = ? ").mkString(" and ")
+
+    val args = fields.map(_.get(bean)).toSeq ++ ids.map(_.get(bean)).toSeq
+
+    executeUpdate(SQLWithArgs(sql, args))
   }
 
   // id required
   def delete(bean: AnyRef) {
-	  // TODO
+    val beanMapping = BeanMapping.getBeanMapping(bean.getClass)(jdbcValueMapperFactory).asInstanceOf[BeanMapping[AnyRef]]
+    val idColumns = beanMapping.idFields
+    val hasId = idColumns.forall { fieldMapping =>
+      val value = fieldMapping.get(bean)
+
+      (value != null) && (fieldMapping.fieldType match {
+        case java.lang.Integer.TYPE | ClassOfInteger | java.lang.Short.TYPE | ClassOfShort |
+             java.lang.Long.TYPE | ClassOfLong  =>
+          value.asInstanceOf[Number].longValue != 0
+        case ClassOfBigDecimal =>
+          value.asInstanceOf[java.math.BigDecimal].longValue != 0
+        case ClassOfScalaBigDecimal =>
+          value.asInstanceOf[scala.math.BigDecimal].longValue != 0
+        case _ => true
+      })
+    }
+
+    if (!hasId) throw new AssertionError("bean's id field is not setted")
+
+    val ids = beanMapping.fields.filter(_.isId)
+    val sql = "delete from " +
+      (if (beanMapping.catelog != null && beanMapping.catelog != "") beanMapping.catelog + "." else "") +
+      beanMapping.tableName +
+      " where " +
+      (for(id <- ids) yield id.columnName + " = ? ").mkString(" and ")
+
+    val args = ids.map(_.get(bean)).toSeq
+
+    executeUpdate(SQLWithArgs(sql, args))
   }
+
 
 }

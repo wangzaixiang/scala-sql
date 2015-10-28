@@ -89,7 +89,7 @@ class SoftMap[K, V <: AnyRef] extends Map[K, V] {
   override def get(key: K): Option[V] = map.get(new SoftMap.SoftKey(key, null)) match {
     case sv: SoftValue[K, V] =>
       sv.get match {
-        case v: V => Some(v)
+        case v if v != null => Some(v)
         case null => None
       }
     case null => None

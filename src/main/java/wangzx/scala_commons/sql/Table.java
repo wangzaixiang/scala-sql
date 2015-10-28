@@ -16,7 +16,8 @@ public @interface Table {
 	String catelog() default "";
 
 	/**
-	 * mapping userName to user_name
+	 * when true mapping userName to user_name
+	 * otherwise mapping userName to username
 	 * @return
 	 */
 	boolean camelToUnderscore() default false;
