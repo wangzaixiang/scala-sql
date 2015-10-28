@@ -4,7 +4,7 @@ import java.sql._
 import javax.sql.DataSource
 import scala.reflect.ClassTag
 
-class RichDataSource(datasource: DataSource)(implicit jdbcValueMapperFactory: JdbcValueMapperFactory) {
+class RichDataSource(val datasource: DataSource)(implicit val jdbcValueMapperFactory: JdbcValueMapperFactory) {
 
   def withConnection[T](f: Connection => T): T = {
     val conn = datasource.getConnection
@@ -33,12 +33,5 @@ class RichDataSource(datasource: DataSource)(implicit jdbcValueMapperFactory: Jd
   def rows[T <: AnyRef](sql: SQLWithArgs)(implicit ct: ClassTag[T]): List[T] = withConnection(_.rows(sql)(ct))
 
   def queryInt(sql: SQLWithArgs): Int = withConnection(_.queryInt(sql))
-
-  def insert(bean: AnyRef) = withConnection(_.insert(bean))
-
-
-  def update(bean: AnyRef) = withConnection(_.update(bean))
-
-  def delete(bean: AnyRef) = withConnection(_.delete(bean))
 
 }
