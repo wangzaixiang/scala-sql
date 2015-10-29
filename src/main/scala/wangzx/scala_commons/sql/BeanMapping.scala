@@ -3,7 +3,10 @@ package wangzx.scala_commons.sql
 import java.lang.reflect.Method
 import java.lang.annotation.Annotation
 import java.beans.Introspector
-import java.sql.{ResultSet, ResultSetMetaData}
+import java.sql.{Connection, ResultSet, ResultSetMetaData}
+import javax.sql.DataSource
+import wangzx.scala_commons.sql.BeanMapping._
+
 import scala.ref.SoftReference
 import scala.reflect.ClassTag
 
@@ -160,9 +163,28 @@ object BeanMapping {
         obj.getBeanValue(rs.getObject(idx), x.asInstanceOf[Class[AnyRef]])
 
       case x if jdbcValueMapperFactory.getJdbcValueMapper(x) != null =>
-        val mapper = jdbcValueMapperFactory.getJdbcValueMapper(x)
-        mapper.getBeanValue(rs.getObject(idx), x.asInstanceOf[Class[Any]])
+        val mapper = jdbcValueMapperFactory.getJdbcValueMapper(x).asInstanceOf[JdbcValueMapper[AnyRef]]
+        mapper.getBeanValue(rs.getObject(idx), x.asInstanceOf[Class[AnyRef]])
     }
+  }
+
+  def insert[T](conn: RichConnection, entity: T): Unit = new BeanOperation[T](entity)(conn.jdbcValueMapperFactory).insert(conn)
+  def insert[T](dataSource: RichDataSource, entity: T): Unit = dataSource.withConnection { conn =>
+    new BeanOperation[T](entity)(dataSource.jdbcValueMapperFactory).insert(new RichConnection(conn)(dataSource.jdbcValueMapperFactory))
+  }
+
+  def update[T](conn: RichConnection, entity: T): Unit =
+    new BeanOperation[T](entity)(conn.jdbcValueMapperFactory).update(conn)
+
+  def update[T](dataSource: RichDataSource, entity: T): Unit = dataSource.withConnection { conn =>
+    new BeanOperation[T](entity)(conn.jdbcValueMapperFactory).update(new RichConnection(conn)(dataSource.jdbcValueMapperFactory))
+  }
+
+  def delete[T](conn: RichConnection, entity: T): Unit =
+    new BeanOperation[T](entity)(conn.jdbcValueMapperFactory).delete(conn)
+
+  def delete[T](dataSource: RichDataSource, entity: T): Unit = dataSource.withConnection { conn =>
+    new BeanOperation[T](entity)(conn.jdbcValueMapperFactory).delete(new RichConnection(conn)(dataSource.jdbcValueMapperFactory))
   }
 
   // TODO
@@ -318,3 +340,158 @@ class UnionBeanMapping[E](val reflectClass: Class[E])(jdbcValueMapperFactory: Jd
   }
 
 }
+
+class BeanOperation[T](bean: T)(implicit jdbcValueMapperFactory: JdbcValueMapperFactory) {
+
+  val beanMapping = BeanMapping.getBeanMapping(bean.getClass.asInstanceOf[Class[T]])(jdbcValueMapperFactory)
+  val includeColumns = collection.mutable.ListBuffer[String]() ++ beanMapping.fields.map(_.columnName)
+  val allColumns = beanMapping.fields.map(_.columnName)
+
+  var ignoreNullField = false
+  var ignoreEmptyField = false
+  val qualifiedTableName =
+    (if (beanMapping.catelog != null && beanMapping.catelog != "") beanMapping.catelog + "." else "") +
+    beanMapping.tableName
+
+  def includeColumn(names: String*): this.type = {
+    val toBeAdd = names.filter(allColumns contains _).filterNot(includeColumns contains _)
+    includeColumns ++= toBeAdd
+    this
+  }
+
+  def excludeColumn(names: String*): this.type = {
+    val toBeRemove = names.filter(allColumns contains _).filter(includeColumns contains _)
+    includeColumns --= toBeRemove
+    this
+  }
+
+  def ignoreEmptyField(flag: Boolean = true): this.type  = {
+    ignoreEmptyField = flag
+    this
+  }
+
+  def ignoreNullField(flag: Boolean = true): this.type  = {
+    ignoreNullField = flag
+    this
+  }
+
+
+  def isNull(t: Any): Boolean = t == null || t == None || t == Nil
+  def isEmpty(t: Any): Boolean = isNull(t) ||
+    (t match {
+      case n : Number => n == 0
+      case "" => true
+      case _ => false
+    })
+
+  lazy val hasId: Boolean = {
+    val idColumns = beanMapping.idFields
+
+    !idColumns.isEmpty && idColumns.forall { fieldMapping =>
+      val value = fieldMapping.get(bean)
+
+      (value != null) && (fieldMapping.fieldType match {
+        case java.lang.Integer.TYPE | ClassOfInteger | java.lang.Short.TYPE | ClassOfShort |
+             java.lang.Long.TYPE | ClassOfLong  =>
+          value.asInstanceOf[Number].longValue != 0
+        case ClassOfBigDecimal =>
+          value.asInstanceOf[java.math.BigDecimal].longValue != 0
+        case ClassOfScalaBigDecimal =>
+          value.asInstanceOf[scala.math.BigDecimal].longValue != 0
+        case _ => true
+      })
+    }
+  }
+
+  def insert(conn: RichConnection): Unit = {
+    val insertFields = beanMapping.fields.filter(x => includeColumns contains x.columnName)
+      .filterNot( x => ignoreNullField && isNull(x.get(bean)) )
+      .filterNot( x => ignoreEmptyField && isEmpty(x.get(bean)) )
+
+    // check the bean hasId setting
+    val idColumns = beanMapping.idFields
+
+    if (!hasId) { // try auto generate
+      val fields = insertFields.filterNot(_.isId)
+
+      val sql = "insert into " + qualifiedTableName + "(" + fields.map(_.columnName).mkString(",") +
+        ") values (" + fields.map(_ => '?').mkString(",") + ")"
+
+      val args = fields.map(_.get(bean)).toSeq
+
+      conn.executeUpdateWithGenerateKey(SQLWithArgs(sql, args)) { rs =>
+        if (rs.next) {
+          idColumns.foreach { col =>
+            val value = col.fieldType match {
+              case java.lang.Boolean.TYPE | ClassOfBoolean => rs.getBoolean(1)
+              case java.lang.Integer.TYPE | ClassOfInteger => rs.getInt(1)
+              case _ => throw new AssertionError
+            }
+            col.asInstanceOf[beanMapping.FieldMapping[Any]].set(bean, value)
+          }
+        }
+      }
+    } else {  // hasID
+
+      val fields = insertFields
+      val sql = "insert into " + qualifiedTableName + "(" + fields.map(_.columnName).mkString(",") +
+        ") values (" + fields.map(_ => '?').mkString(",") + ")"
+
+      val args = fields.map(_.get(bean)).toSeq
+      conn.executeUpdate(SQLWithArgs(sql, args))
+    }
+  }
+
+  def update(conn: RichConnection): Unit = {
+    // if has Id field and with value
+    val idColumns = beanMapping.idFields
+
+    if (!hasId) throw new AssertionError("bean's id field is not setted")
+
+    val ids = beanMapping.fields.filter(_.isId)
+
+    val fields = beanMapping.fields.filterNot(_.isId)
+      .filter(x  => includeColumns contains x.columnName)
+      .filterNot(x => ignoreNullField && isNull(x.get(bean)) )
+      .filterNot(x => ignoreEmptyField && isEmpty(x.get(bean)) )
+
+    val sql = "update " + qualifiedTableName + " set " + fields.map(x => x.columnName + " = ?").mkString(",") +
+      " where " + ids.map( x => x.columnName + " = ?").mkString(" and ")
+
+    val args = fields.map(_.get(bean)).toSeq ++ ids.map(_.get(bean)).toSeq
+
+    conn.executeUpdate(SQLWithArgs(sql, args))
+  }
+
+
+  def delete(conn: RichConnection): Unit = {
+
+    if (!hasId) throw new AssertionError("bean's id field is not setted")
+
+    val ids = beanMapping.fields.filter(_.isId)
+    val sql = "delete from " + qualifiedTableName + " where " +
+      ids.map( x => x.columnName + " = ? ").mkString(" and ")
+
+    val args = ids.map(_.get(bean)).toSeq
+
+    conn.executeUpdate(SQLWithArgs(sql, args))
+  }
+
+  def insert(dataSource: RichDataSource): Unit = dataSource.withConnection { conn =>
+    val rich = new RichConnection(conn)(dataSource.jdbcValueMapperFactory)
+    insert(rich)
+  }
+
+  def update(dataSource: RichDataSource): Unit = dataSource.withConnection { conn =>
+    val rich = new RichConnection(conn)(dataSource.jdbcValueMapperFactory)
+    update(rich)
+  }
+
+  def delete(dataSource: RichDataSource): Unit = dataSource.withConnection { conn =>
+    val rich = new RichConnection(conn)(dataSource.jdbcValueMapperFactory)
+    delete(rich)
+  }
+
+
+}
+

@@ -72,11 +72,16 @@ object TestSQL {
       birthday = Date.valueOf("2000-01-01")
       phone = "18612345679"
     }
-    datasource.insert(student)
-    
-    datasource.update(student)
-    
-    datasource.delete(student)
+
+    new INSERT(student).excludeColumns("b").execute(datasource)
+
+//    datasource.INSERT(student).execute
+//
+//    datasource.insert(student)
+//
+//    datasource.update(student)
+//
+//    datasource.delete(student)
 
     println("iterate students using ResultSet")
     datasource.eachRow(sql"select * from student where name = ${name}") { rs: ResultSet =>
