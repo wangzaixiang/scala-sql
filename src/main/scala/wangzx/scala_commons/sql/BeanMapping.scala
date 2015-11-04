@@ -141,7 +141,19 @@ object BeanMapping {
   private def rsCellToJavaValue(rs: ResultSet, idx: Int,
              fieldMapping: BeanMapping[_]#FieldMapping[_],
              jdbcValueMapperFactory: JdbcValueMapperFactory): Any = {
-    fieldMapping.fieldType match {
+
+    val isNull = rs.getObject(idx) == null
+
+    if(isNull) fieldMapping.fieldType match {
+      case java.lang.Boolean.TYPE => false
+      case java.lang.Byte.TYPE => 0.toByte
+      case java.lang.Short.TYPE  => 0.toShort
+      case java.lang.Integer.TYPE => 0.toInt
+      case java.lang.Long.TYPE => 0.toLong
+      case java.lang.Float.TYPE => 0.toFloat
+      case java.lang.Double.TYPE => 0.toDouble
+      case _ => null
+    } else fieldMapping.fieldType match {
       case java.lang.Boolean.TYPE | ClassOfBoolean => rs.getBoolean(idx)
       case java.lang.Byte.TYPE | ClassOfByte => rs.getByte(idx)
       case java.lang.Short.TYPE | ClassOfShort => rs.getShort(idx)
