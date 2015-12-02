@@ -8,7 +8,8 @@ scalaVersion := "2.11.6"
 
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.9",
-  "com.h2database" % "h2" % "1.4.184" % "test"
+  "com.h2database" % "h2" % "1.4.184" % "test",
+  "junit" % "junit" % "4.12" % "test"
 )
 publishMavenStyle := true
 

@@ -21,9 +21,34 @@ class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValue
 
   /**
    * map a ResultSet to an object, either ResultSet or Row or JavaBean
+   * 2015-11-10 add support for primitive type which maps to the first column only
+   * TODO add support for JdbcValueMapper
    */
   private def rs2mapped[T](rsMeta: ResultSetMetaData, rs: ResultSet, tag: ClassTag[T]): T = {
     tag.runtimeClass match {
+      case BeanMapping.ClassOfByte | java.lang.Byte.TYPE =>
+        rs.getByte(1).asInstanceOf[T]
+      case BeanMapping.ClassOfShort | java.lang.Short.TYPE =>
+        rs.getShort(1).asInstanceOf[T]
+      case BeanMapping.ClassOfInteger | java.lang.Integer.TYPE =>
+        rs.getInt(1).asInstanceOf[T]
+      case BeanMapping.ClassOfFloat | java.lang.Float.TYPE =>
+        rs.getFloat(1).asInstanceOf[T]
+      case BeanMapping.ClassOfDouble | java.lang.Double.TYPE =>
+        rs.getDouble(1).asInstanceOf[T]
+      case BeanMapping.ClassOfLong | java.lang.Long.TYPE =>
+        rs.getLong(1).asInstanceOf[T]
+      case BeanMapping.ClassOfBigDecimal =>
+        rs.getBigDecimal(1).asInstanceOf[T]
+      case BeanMapping.ClassOfScalaBigDecimal =>
+        BigDecimal(rs.getBigDecimal(1)).asInstanceOf[T]
+      case BeanMapping.ClassOfSQLDate =>
+        rs.getDate(1).asInstanceOf[T]
+      case BeanMapping.ClassOfSQLTime =>
+        rs.getTime(1).asInstanceOf[T]
+      case BeanMapping.ClassOfUtilDate | BeanMapping.ClassOfSQLTimestamp =>
+        rs.getTimestamp(1).asInstanceOf[T]
+
       case ClassOfResultSet =>
         rs.asInstanceOf[T]
       case ClassOfRow =>
@@ -118,6 +143,26 @@ class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValue
     }
     LOG.debug("SQL result: {}", buffer.size)
     buffer.toList
+  }
+
+  def row[T : ClassTag](sql: SQLWithArgs): Option[T] = {
+    val prepared = conn.prepareStatement(sql.sql)
+    if (sql.args != null) setStatementArgs(prepared, sql.args)
+
+    LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args):_*)
+
+    val rs = prepared.executeQuery()
+    val rsMeta = rs.getMetaData
+
+    var result: Option[T] = None
+    var index = -1
+    while (rs.next() && index == -1) {
+      index += 1
+      result = Some( rs2mapped(rsMeta, rs, implicitly[ClassTag[T]]) )
+    }
+    LOG.debug("SQL result: {}", rs.getRow)
+
+    result
   }
 
   def queryInt(sql: SQLWithArgs): Int = {

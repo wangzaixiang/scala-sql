@@ -1,6 +1,6 @@
 package wangzx.scala_commons.sql
 
-import java.lang.reflect.Method
+import java.lang.reflect.{Type, ParameterizedType, Method}
 import java.lang.annotation.Annotation
 import java.beans.Introspector
 import java.sql.{Connection, ResultSet, ResultSetMetaData}
@@ -26,12 +26,13 @@ object BeanMapping {
   val ClassOfString = classOf[java.lang.String]
   val ClassOfSQLDate = classOf[java.sql.Date]
   val ClassOfUtilDate = classOf[java.util.Date]
-  val ClassOfSQLTime = classOf[java.sql.Date]
+  val ClassOfSQLTime = classOf[java.sql.Time]
   val ClassOfSQLTimestamp = classOf[java.sql.Timestamp]
   val ClassOfBigDecimal = classOf[java.math.BigDecimal]
   val ClassOfScalaBigDecimal = classOf[scala.math.BigDecimal]
   val ClassOfByteArray = classOf[Array[Byte]]
   val ClassOfJdbcValueMapper = classOf[JdbcValueMapper[_]]
+  val ClassOfScalaOption = classOf[Option[_]]
 
   val G_BeanMappings = new SoftMap[Class[_], BeanMapping[_]]()
 
@@ -59,6 +60,7 @@ object BeanMapping {
     case ClassOfSQLTimestamp | ClassOfUtilDate => true
     case ClassOfString => true
     case ClassOfByteArray => true
+    case ClassOfScalaOption => true
     case _ => ClassOfJdbcValueMapper.isAssignableFrom(typ)
   }
 
@@ -138,22 +140,9 @@ object BeanMapping {
     bean
   }
 
-  private def rsCellToJavaValue(rs: ResultSet, idx: Int,
-             fieldMapping: BeanMapping[_]#FieldMapping[_],
-             jdbcValueMapperFactory: JdbcValueMapperFactory): Any = {
+  class ResultSetPrimitiveOperations(rs: ResultSet, idx: Int) extends PartialFunction[Class[_], Any]  {
 
-    val isNull = rs.getObject(idx) == null
-
-    if(isNull) fieldMapping.fieldType match {
-      case java.lang.Boolean.TYPE => false
-      case java.lang.Byte.TYPE => 0.toByte
-      case java.lang.Short.TYPE  => 0.toShort
-      case java.lang.Integer.TYPE => 0.toInt
-      case java.lang.Long.TYPE => 0.toLong
-      case java.lang.Float.TYPE => 0.toFloat
-      case java.lang.Double.TYPE => 0.toDouble
-      case _ => null
-    } else fieldMapping.fieldType match {
+    val INNER: PartialFunction[Class[_], Any] = {
       case java.lang.Boolean.TYPE | ClassOfBoolean => rs.getBoolean(idx)
       case java.lang.Byte.TYPE | ClassOfByte => rs.getByte(idx)
       case java.lang.Short.TYPE | ClassOfShort => rs.getShort(idx)
@@ -168,6 +157,38 @@ object BeanMapping {
       case ClassOfSQLTimestamp | ClassOfUtilDate => rs.getTimestamp(idx)
       case ClassOfString => rs.getString(idx)
       case ClassOfByteArray => rs.getBytes(idx)
+    }
+
+    def isDefinedAt(primType: Class[_]) = INNER.isDefinedAt(primType)
+    def apply(primType: Class[_]) = INNER.apply(primType)
+
+  }
+
+  // TODO support Option[T]
+  private def rsCellToJavaValue(rs: ResultSet, idx: Int,
+             fieldMapping: BeanMapping[_]#FieldMapping[_],
+             jdbcValueMapperFactory: JdbcValueMapperFactory): Any = {
+
+    val isNull = rs.getObject(idx) == null
+    val rsPrimitiveOper = new ResultSetPrimitiveOperations(rs, idx)
+
+    if(isNull) fieldMapping.fieldType match {
+      case java.lang.Boolean.TYPE => false
+      case java.lang.Byte.TYPE => 0.toByte
+      case java.lang.Short.TYPE  => 0.toShort
+      case java.lang.Integer.TYPE => 0.toInt
+      case java.lang.Long.TYPE => 0.toLong
+      case java.lang.Float.TYPE => 0.toFloat
+      case java.lang.Double.TYPE => 0.toDouble
+      case ClassOfScalaOption => None
+      case _ => null
+    } else fieldMapping.fieldType match {
+      case x if rsPrimitiveOper.isDefinedAt(x) =>
+        rsPrimitiveOper.apply(x)
+
+      case ClassOfScalaOption =>
+        val prim = rsPrimitiveOper.apply(fieldMapping.optionalInnerType)
+        Some(prim)
 
       case x if ClassOfJdbcValueMapper.isAssignableFrom(x) => //
         val rsValue = rs.getObject(idx)
@@ -211,7 +232,8 @@ trait BeanMapping[E] {
   trait FieldMapping[F] {
     val fieldName: String
     val columnName: String
-    val fieldType: Class[F]
+    val fieldType: Class[F]   // maybe Option[T]
+    val optionalInnerType: Class[_]  // T for Optional[T]
 
     val isId: Boolean
     val isAutoIncrement: Boolean
@@ -239,6 +261,7 @@ class UnionBeanMapping[E](val reflectClass: Class[E])(jdbcValueMapperFactory: Jd
 
   trait TmpFieldMapping[F] extends FieldMapping[F] {
     val isTransient: Boolean
+    val isValid: Boolean
   }
   val antTable = reflectClass.getAnnotation(classOf[Table])
   val catelog = if (antTable != null) antTable.catelog() else ""
@@ -273,6 +296,23 @@ class UnionBeanMapping[E](val reflectClass: Class[E])(jdbcValueMapperFactory: Jd
     val isId = antId != null
     val isAutoIncrement = (antId != null && antId.auto)
 
+    val (optionalInnerType, isValid) = fieldType match {
+      case ClassOfScalaOption =>
+        val typeArg = getter.getGenericReturnType.asInstanceOf[ParameterizedType].getActualTypeArguments.apply(0)
+
+        val optionalType: Class[_] =
+          if(typeArg == classOf[Object]) {
+            if(antColumn != null) antColumn.optionalType()
+            else null
+          }
+          else if(typeArg.isInstanceOf[Class[_]]) typeArg.asInstanceOf[Class[_]]
+          else classOf[Object]
+
+        (optionalType, optionalType != null && isSupportedDataType(optionalType))
+      case _ =>
+        (null, isSupportedDataType(fieldType))
+    }
+
     def get(bean: E) = getter.invoke(bean).asInstanceOf[T]
     def set(bean: E, value: T) {
       setter.invoke(bean, value.asInstanceOf[AnyRef])
@@ -280,20 +320,17 @@ class UnionBeanMapping[E](val reflectClass: Class[E])(jdbcValueMapperFactory: Jd
     }
   }
 
-
-
   def getFieldByName(name: String) = fieldsByName.get(name)
   def getFieldByColumnName(columnName:String) = fieldsByColumnName.get(columnName)
 
+  def isSupportedDataType(cls: Class[_]): Boolean =
+    BeanMapping.isSupportedDataType(cls) || jdbcValueMapperFactory.getJdbcValueMapper(cls) != null
   /**
    * support 2 styles mapping:
    * 1. scala style. eg: name() for getter and name_=(arg) for setter
    * 2. JavaBean Style. eg: getName()/isName() setName()
    */
   def getMappingFields: List[FieldMapping[_]] = {
-
-    def isSupportedDataType(cls: Class[_]) =
-      BeanMapping.isSupportedDataType(cls) || jdbcValueMapperFactory.getJdbcValueMapper(cls) != null
 
     val getters: Map[String, Method] = reflectClass.getMethods.filter { method =>
       method.getParameterTypes.length == 0 && isSupportedDataType(method.getReturnType)
@@ -346,7 +383,7 @@ class UnionBeanMapping[E](val reflectClass: Class[E])(jdbcValueMapperFactory: Jd
       scala.orElse(is).orElse(get)
     }
 
-    mappings.toList.filter( _.isTransient == false )
+    mappings.toList.filter(f => f.isTransient == false && f.isValid == true )
       .groupBy(_.fieldName).map(_._2.apply(0)).toList   // avoid field dupicate, such as name/name_= and getName/setName
 
   }
@@ -364,6 +401,11 @@ class BeanOperation[T](bean: T)(implicit jdbcValueMapperFactory: JdbcValueMapper
   val qualifiedTableName =
     (if (beanMapping.catelog != null && beanMapping.catelog != "") beanMapping.catelog + "." else "") +
     beanMapping.tableName
+
+  def excludeAllColumns(): this.type = {
+    includeColumns.clear()
+    this
+  }
 
   def includeColumn(names: String*): this.type = {
     val toBeAdd = names.filter(allColumns contains _).filterNot(includeColumns contains _)

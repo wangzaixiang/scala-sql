@@ -13,4 +13,12 @@ public @interface Column {
 
 	boolean isTransient() default false;
 
+	/**
+	 * when mapping a field like Option[Int], we need annotated the gereric type
+	 * since all primitive type is erased to Option[Object]
+	 *
+	 * TODO refactor to a good name
+     */
+	Class<?> optionalType() default Object.class;
+
 }

@@ -32,6 +32,8 @@ class RichDataSource(val datasource: DataSource)(implicit val jdbcValueMapperFac
 
   def rows[T <: AnyRef](sql: SQLWithArgs)(implicit ct: ClassTag[T]): List[T] = withConnection(_.rows(sql)(ct))
 
+  def row[T : ClassTag](sql: SQLWithArgs)(implicit ct: ClassTag[T]): Option[T] = withConnection(_.row(sql)(ct))
+
   def queryInt(sql: SQLWithArgs): Int = withConnection(_.queryInt(sql))
 
 }

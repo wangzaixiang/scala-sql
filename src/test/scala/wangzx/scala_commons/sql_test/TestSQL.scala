@@ -73,7 +73,7 @@ object TestSQL {
       phone = "18612345679"
     }
 
-    new INSERT(student).excludeColumns("b").execute(datasource)
+//    new INSERT(student).excludeColumns("b").execute(datasource)
 
 //    datasource.INSERT(student).execute
 //
