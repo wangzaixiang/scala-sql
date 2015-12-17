@@ -2,14 +2,15 @@ organization := "com.github.wangzaixiang"
 
 name := "scala-sql"
 
-version := "1.0.4-SNAPSHOT"
+version := "1.0.4"
 
 scalaVersion := "2.11.6"
 
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.9",
   "com.h2database" % "h2" % "1.4.184" % "test",
-  "junit" % "junit" % "4.12" % "test"
+  "junit" % "junit" % "4.12" % "test",
+  "ch.qos.logback" % "logback-classic" % "1.1.3" % "test"
 )
 publishMavenStyle := true
 
