@@ -10,7 +10,8 @@ libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.9",
   "com.h2database" % "h2" % "1.4.184" % "test",
   "junit" % "junit" % "4.12" % "test",
-  "ch.qos.logback" % "logback-classic" % "1.1.3" % "test"
+  "ch.qos.logback" % "logback-classic" % "1.1.3" % "test",
+  "mysql" % "mysql-connector-java" % "5.1.38" % "test"
 )
 publishMavenStyle := true
 

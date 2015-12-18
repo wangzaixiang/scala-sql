@@ -67,6 +67,15 @@ class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValue
     }
   }
 
+  private def withPreparedStatement[T](sql: String)(f: PreparedStatement => T): T = {
+    val stmt = conn.prepareStatement(sql)
+    try {
+      f(stmt)
+    } finally {
+      stmt.close()
+    }
+  }
+
   def withTransaction[T](f: Connection => T): T = {
     try {
       conn.setAutoCommit(false)
@@ -85,7 +94,7 @@ class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValue
   @inline private def setStatementArgs(stmt: PreparedStatement, args: Seq[Any]) =
     args.zipWithIndex.foreach {
       case (v: JdbcValueMapper[AnyRef], idx) => stmt.setObject(idx+1, v.getJdbcValue(v))
-      case (v, idx) if jdbcValueMapperFactory.getJdbcValueMapper(v.getClass) != null =>
+      case (v, idx) if v != null && jdbcValueMapperFactory.getJdbcValueMapper(v.getClass) != null =>
         val mapper = jdbcValueMapperFactory.getJdbcValueMapper(v.getClass).asInstanceOf[JdbcValueMapper[Any]]
         stmt.setObject( idx+1, mapper.getJdbcValue(v) )
       case (v: BigDecimal, idx) => stmt.setBigDecimal(idx+1, v.bigDecimal)
@@ -97,23 +106,28 @@ class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValue
       if (processGenerateKeys != null) Statement.RETURN_GENERATED_KEYS
       else Statement.NO_GENERATED_KEYS)
 
-    if (stmt.args != null) setStatementArgs(prepared, stmt.args)
+    try {
+      if (stmt.args != null) setStatementArgs(prepared, stmt.args)
 
-    LOG.debug("SQL Preparing: {} args: {}", Seq(stmt.sql, stmt.args): _*)
+      LOG.debug("SQL Preparing: {} args: {}", Seq(stmt.sql, stmt.args): _*)
 
-    val result = prepared.executeUpdate()
+      val result = prepared.executeUpdate()
 
-    if (processGenerateKeys != null) {
-      val keys = prepared.getGeneratedKeys
-      processGenerateKeys(keys)
+      if (processGenerateKeys != null) {
+        val keys = prepared.getGeneratedKeys
+        processGenerateKeys(keys)
+      }
+
+      LOG.debug("SQL result: {}", result)
+      result
     }
-
-    LOG.debug("SQL result: {}", result)
-    result
+    finally  {
+      prepared.close
+    }
   }
 
-  def eachRow[T : ClassTag](sql: SQLWithArgs)(f: T => Unit) {
-    val prepared = conn.prepareStatement(sql.sql)
+  def eachRow[T : ClassTag](sql: SQLWithArgs)(f: T => Unit) = withPreparedStatement(sql.sql){ prepared =>
+//    val prepared = conn.prepareStatement(sql.sql)
     if (sql.args != null) setStatementArgs(prepared, sql.args)
 
     LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args):_*)
@@ -127,9 +141,9 @@ class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValue
     LOG.debug("SQL result: {}", rs.getRow)
   }
 
-  def rows[T : ClassTag](sql: SQLWithArgs): List[T] = {
+  def rows[T : ClassTag](sql: SQLWithArgs): List[T] = withPreparedStatement(sql.sql) { prepared =>
     val buffer = new ListBuffer[T]()
-    val prepared = conn.prepareStatement(sql.sql)
+//    val prepared = conn.prepareStatement(sql.sql)
     if (sql.args != null) setStatementArgs(prepared, sql.args)
 
     LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args):_*)
@@ -145,28 +159,30 @@ class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValue
     buffer.toList
   }
 
-  def row[T : ClassTag](sql: SQLWithArgs): Option[T] = {
-    val prepared = conn.prepareStatement(sql.sql)
+  def row[T: ClassTag](sql: SQLWithArgs): Option[T] = withPreparedStatement(sql.sql) { prepared =>
     if (sql.args != null) setStatementArgs(prepared, sql.args)
 
-    LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args):_*)
+    LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
     val rs = prepared.executeQuery()
     val rsMeta = rs.getMetaData
 
     var result: Option[T] = None
     var index = -1
-    while (rs.next() && index == -1) {
+    while (index == -1 && rs.next()) {
       index += 1
-      result = Some( rs2mapped(rsMeta, rs, implicitly[ClassTag[T]]) )
+      result = Some(rs2mapped(rsMeta, rs, implicitly[ClassTag[T]]))
     }
-    LOG.debug("SQL result: {}", rs.getRow)
+    if(rs.next)
+      LOG.warn("expect 1 row but really more. SQL result: {}", rs.getRow - 1)
+    else
+      LOG.debug("SQL result: {}", rs.getRow)
 
     result
   }
 
-  def queryInt(sql: SQLWithArgs): Int = {
-    val prepared = conn.prepareStatement(sql.sql)
+  def queryInt(sql: SQLWithArgs): Int = withPreparedStatement(sql.sql){ prepared =>
+//    val prepared = conn.prepareStatement(sql.sql)
     if(sql.args != null) setStatementArgs(prepared, sql.args)
 
     LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args):_*)
