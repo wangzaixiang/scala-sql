@@ -6,7 +6,7 @@ complicated code.
 ## Simple Example
 Let's take an example for simple JDBC access:
 
-```
+```scala
 val conn = DriverManager.getConnection(url, user, password)
 
 val stmt = conn.prepareStatement("select * from users where id = ?")
@@ -25,7 +25,7 @@ finally {
 
 ```
 and how scala-sql help us:
-```
+```scala
 val conn =  DriverManager.getConnection(url, user, password)
 val userId = 10
 
@@ -51,7 +51,7 @@ very noisy.
 
 based on Scala's String-Interpolation feature, scala-sql provides a powerful sql""
 constructor like:
-```
+```scala
 sql"select * from users where id = ${userId}"
 
 sql"""update users set name = $userName,
@@ -63,7 +63,7 @@ don't worry about sql-inject security problem here, since the sql string interpo
 not simple String-Concat operation, It's really paramterized dynamic SQL, so this exmaple
 will really like follows:
 
-```
+```scala
 val stmt = prepareStatement("select * from users where id = ?")
 stmt.setInt(1, userId)
 
@@ -77,6 +77,7 @@ val stmt2 = prepareStatement("update users set name = ?, email = ? where id = ? 
 ## Mapping
 scala-sql is not an ORM frameworkd or library, it is just a JDBC wrapper. but it still
 provide some mapping functions.
+
 1. mapping a row(ResultSet) as Row object. since ResultSet is a temporary cursor which
  will be invalid after cursor move or cursor closed. scala-sql provide a deattached
  value object `Row`. the `Row` API is so familiar as the `ResultSet` with `getXXX(index)`
