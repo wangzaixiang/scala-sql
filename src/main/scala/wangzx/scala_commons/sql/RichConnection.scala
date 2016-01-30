@@ -48,6 +48,8 @@ class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValue
         rs.getTime(1).asInstanceOf[T]
       case BeanMapping.ClassOfUtilDate | BeanMapping.ClassOfSQLTimestamp =>
         rs.getTimestamp(1).asInstanceOf[T]
+      case BeanMapping.ClassOfString =>
+        rs.getString(1).asInstanceOf[T]
 
       case ClassOfResultSet =>
         rs.asInstanceOf[T]
