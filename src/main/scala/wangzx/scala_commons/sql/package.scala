@@ -18,7 +18,7 @@ package object sql {
 
   implicit def enhanceStringContext(sc: StringContext) = new SQLStringContext(sc)
 
-  implicit def enhancePlainSql(stmt: String) = SQLWithArgs(stmt, null)
+  implicit def enhancePlainSql(stmt: String) = SQLWithArgs(stmt, Seq.empty)
 
   object NullJdbcValueMapperFactory extends JdbcValueMapperFactory {
     def getJdbcValueMapper[T](`type`: Class[T]) =

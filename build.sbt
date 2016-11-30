@@ -2,9 +2,11 @@ organization := "com.github.wangzaixiang"
 
 name := "scala-sql"
 
-version := "1.0.5"
+version := "1.0.6"
 
-scalaVersion := "2.11.6"
+scalaVersion := "2.11.8"
+
+crossScalaVersions := Seq("2.11.8", "2.12.0")
 
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.9",

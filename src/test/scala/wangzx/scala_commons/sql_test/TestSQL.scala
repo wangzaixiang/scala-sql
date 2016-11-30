@@ -83,6 +83,16 @@ object TestSQL {
 //
 //    datasource.delete(student)
 
+
+    println("iterate students using ResultSet")
+    val stmt: SQLWithArgs = "select * from student"
+    datasource.eachRow(stmt) { rs: ResultSet =>
+      println(s"""name = ${rs.getString("name")} email = ${rs.getString("email")} birthday = ${rs.getDate("birthday")} mobile=${rs.getString("mobile")}""")
+    }
+    println()
+
+    println(stmt + sql" where name = $name")
+
     println("iterate students using ResultSet")
     datasource.eachRow(sql"select * from student where name = ${name}") { rs: ResultSet =>
       println(s"""name = ${rs.getString("name")} email = ${rs.getString("email")} birthday = ${rs.getDate("birthday")} mobile=${rs.getString("mobile")}""")
