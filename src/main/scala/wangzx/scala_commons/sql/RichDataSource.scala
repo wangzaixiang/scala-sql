@@ -4,7 +4,7 @@ import java.sql._
 import javax.sql.DataSource
 import scala.reflect.ClassTag
 
-class RichDataSource(val datasource: DataSource)(implicit val jdbcValueMapperFactory: JdbcValueMapperFactory) {
+class RichDataSource(val datasource: DataSource) {
 
   def withConnection[T](f: Connection => T): T = {
     val conn = datasource.getConnection
@@ -26,13 +26,13 @@ class RichDataSource(val datasource: DataSource)(implicit val jdbcValueMapperFac
   def executeUpdateWithGenerateKey(sql: SQLWithArgs)(processGenerateKeys: ResultSet => Unit): Int =
     withConnection(_.executeUpdateWithGenerateKey(sql)(processGenerateKeys))
 
-  def eachRow[T <: AnyRef](sql: SQLWithArgs)(f: T => Unit)(implicit ct: ClassTag[T]) =
-    withConnection(_.eachRow(sql)(f)(ct))
+  def eachRow[T : ResultSetMapper](sql: SQLWithArgs)(f: T => Unit) =
+    withConnection(_.eachRow(sql)(f))
 
 
-  def rows[T <: AnyRef](sql: SQLWithArgs)(implicit ct: ClassTag[T]): List[T] = withConnection(_.rows(sql)(ct))
+  def rows[T : ResultSetMapper](sql: SQLWithArgs): List[T] = withConnection(_.rows(sql))
 
-  def row[T : ClassTag](sql: SQLWithArgs)(implicit ct: ClassTag[T]): Option[T] = withConnection(_.row(sql)(ct))
+  def row[T : ResultSetMapper](sql: SQLWithArgs): Option[T] = withConnection(_.row(sql))
 
   def queryInt(sql: SQLWithArgs): Int = withConnection(_.queryInt(sql))
 

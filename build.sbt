@@ -2,7 +2,7 @@ organization := "com.github.wangzaixiang"
 
 name := "scala-sql"
 
-version := "1.0.6"
+version := "2.0.0-SNAPSHOT"
 
 scalaVersion := "2.11.8"
 
@@ -10,6 +10,7 @@ crossScalaVersions := Seq("2.11.8", "2.12.0")
 
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.9",
+  "org.scala-lang" % "scala-reflect" % "2.11.8",
   "com.h2database" % "h2" % "1.4.184" % "test",
   "junit" % "junit" % "4.12" % "test",
   "ch.qos.logback" % "logback-classic" % "1.1.3" % "test",

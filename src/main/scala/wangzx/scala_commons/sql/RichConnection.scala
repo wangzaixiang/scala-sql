@@ -1,64 +1,21 @@
 package wangzx.scala_commons.sql
 
 import java.sql._
-import scala.reflect.ClassTag
+
+
 import scala.collection.mutable.ListBuffer
 
 object RichConnection {
-  val ClassOfResultSet = classOf[ResultSet]
-  val ClassOfRow = classOf[Row]
-  val ClassOfJdbcValueMapping = classOf[JdbcValueMapper[_]]
+
 
   import org.slf4j.{LoggerFactory, Logger}
   val LOG: Logger = LoggerFactory.getLogger(classOf[RichConnection])
 
 }
 
-class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValueMapperFactory) {
+class RichConnection(val conn: Connection) {
 
   import RichConnection._
-  import BeanMapping._
-
-  /**
-   * map a ResultSet to an object, either ResultSet or Row or JavaBean
-   * 2015-11-10 add support for primitive type which maps to the first column only
-   * TODO add support for JdbcValueMapper
-   */
-  private def rs2mapped[T](rsMeta: ResultSetMetaData, rs: ResultSet, tag: ClassTag[T]): T = {
-    tag.runtimeClass match {
-      case BeanMapping.ClassOfByte | java.lang.Byte.TYPE =>
-        rs.getByte(1).asInstanceOf[T]
-      case BeanMapping.ClassOfShort | java.lang.Short.TYPE =>
-        rs.getShort(1).asInstanceOf[T]
-      case BeanMapping.ClassOfInteger | java.lang.Integer.TYPE =>
-        rs.getInt(1).asInstanceOf[T]
-      case BeanMapping.ClassOfFloat | java.lang.Float.TYPE =>
-        rs.getFloat(1).asInstanceOf[T]
-      case BeanMapping.ClassOfDouble | java.lang.Double.TYPE =>
-        rs.getDouble(1).asInstanceOf[T]
-      case BeanMapping.ClassOfLong | java.lang.Long.TYPE =>
-        rs.getLong(1).asInstanceOf[T]
-      case BeanMapping.ClassOfBigDecimal =>
-        rs.getBigDecimal(1).asInstanceOf[T]
-      case BeanMapping.ClassOfScalaBigDecimal =>
-        BigDecimal(rs.getBigDecimal(1)).asInstanceOf[T]
-      case BeanMapping.ClassOfSQLDate =>
-        rs.getDate(1).asInstanceOf[T]
-      case BeanMapping.ClassOfSQLTime =>
-        rs.getTime(1).asInstanceOf[T]
-      case BeanMapping.ClassOfUtilDate | BeanMapping.ClassOfSQLTimestamp =>
-        rs.getTimestamp(1).asInstanceOf[T]
-      case BeanMapping.ClassOfString =>
-        rs.getString(1).asInstanceOf[T]
-
-      case ClassOfResultSet =>
-        rs.asInstanceOf[T]
-      case ClassOfRow =>
-        Row.resultSetToRow(rsMeta, rs).asInstanceOf[T]
-      case _ =>
-        BeanMapping.rs2bean(rsMeta, rs, jdbcValueMapperFactory)(tag)
-    }
-  }
 
   def withStatement[T](f: Statement => T): T = {
     val stmt = conn.createStatement
@@ -93,14 +50,10 @@ class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValue
 
   def executeUpdate(stmt: SQLWithArgs): Int = executeUpdateWithGenerateKey(stmt)(null)
 
-  @inline private def setStatementArgs(stmt: PreparedStatement, args: Seq[Any]) =
+  @inline private def setStatementArgs(stmt: PreparedStatement, args: Seq[JdbcValue[_]]) =
     args.zipWithIndex.foreach {
-      case (v: JdbcValueMapper[AnyRef], idx) => stmt.setObject(idx+1, v.getJdbcValue(v))
-      case (v, idx) if v != null && jdbcValueMapperFactory.getJdbcValueMapper(v.getClass) != null =>
-        val mapper = jdbcValueMapperFactory.getJdbcValueMapper(v.getClass).asInstanceOf[JdbcValueMapper[Any]]
-        stmt.setObject( idx+1, mapper.getJdbcValue(v) )
-      case (v: BigDecimal, idx) => stmt.setBigDecimal(idx+1, v.bigDecimal)
-      case (v, idx) => stmt.setObject(idx + 1, v)
+      case (null, idx) => stmt.setNull( idx+1, Types.VARCHAR )
+      case (v, idx) => v.passIn(stmt, idx+1)
     }
 
   def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(processGenerateKeys: ResultSet => Unit = null): Int = {
@@ -128,22 +81,23 @@ class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValue
     }
   }
 
-  def eachRow[T : ClassTag](sql: SQLWithArgs)(f: T => Unit) = withPreparedStatement(sql.sql){ prepared =>
+  def eachRow[T : ResultSetMapper](sql: SQLWithArgs)(f: T => Unit) = withPreparedStatement(sql.sql){ prepared =>
 //    val prepared = conn.prepareStatement(sql.sql)
     if (sql.args != null) setStatementArgs(prepared, sql.args)
 
     LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args):_*)
 
+    val mapper = implicitly[ResultSetMapper[T]]
     val rs = prepared.executeQuery()
     val rsMeta = rs.getMetaData
     while (rs.next()) {
-      val mapped = rs2mapped(rsMeta, rs, implicitly[ClassTag[T]])
+      val mapped = mapper.from(rs)
       f(mapped)
     }
     LOG.debug("SQL result: {}", rs.getRow)
   }
 
-  def rows[T : ClassTag](sql: SQLWithArgs): List[T] = withPreparedStatement(sql.sql) { prepared =>
+  def rows[T : ResultSetMapper](sql: SQLWithArgs): List[T] = withPreparedStatement(sql.sql) { prepared =>
     val buffer = new ListBuffer[T]()
 //    val prepared = conn.prepareStatement(sql.sql)
     if (sql.args != null) setStatementArgs(prepared, sql.args)
@@ -153,7 +107,7 @@ class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValue
     val rs = prepared.executeQuery()
     val rsMeta = rs.getMetaData
     while (rs.next()) {
-      val mapped = rs2mapped(rsMeta, rs, implicitly[ClassTag[T]])
+      val mapped = implicitly[ResultSetMapper[T]].from(rs)
       buffer += mapped
 
     }
@@ -161,19 +115,19 @@ class RichConnection(val conn: Connection)(val jdbcValueMapperFactory: JdbcValue
     buffer.toList
   }
 
-  def row[T: ClassTag](sql: SQLWithArgs): Option[T] = withPreparedStatement(sql.sql) { prepared =>
+  def row[T: ResultSetMapper](sql: SQLWithArgs): Option[T] = withPreparedStatement(sql.sql) { prepared =>
     if (sql.args != null) setStatementArgs(prepared, sql.args)
 
     LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
     val rs = prepared.executeQuery()
-    val rsMeta = rs.getMetaData
+//    val rsMeta = rs.getMetaData
 
     var result: Option[T] = None
     var index = -1
     while (index == -1 && rs.next()) {
       index += 1
-      result = Some(rs2mapped(rsMeta, rs, implicitly[ClassTag[T]]))
+      result = Some(implicitly[ResultSetMapper[T]].from(rs))
     }
     if(rs.next)
       LOG.warn("expect 1 row but really more. SQL result: {}", rs.getRow - 1)

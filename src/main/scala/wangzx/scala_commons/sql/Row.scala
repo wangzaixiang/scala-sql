@@ -133,6 +133,10 @@ object Row {
     new Row(cells)
   }
 
+  implicit val resultSetMapper: ResultSetMapper[Row] = new ResultSetMapper[Row] {
+    override def from(rs: ResultSet): Row = resultSetToRow(rs.getMetaData, rs)
+  }
+
 }
 
 class Row(val cells: Seq[Row.Cell[_]]) {
