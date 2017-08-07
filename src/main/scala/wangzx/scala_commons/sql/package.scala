@@ -13,7 +13,7 @@ package object sql {
 
   implicit def enhanceDataSource(datasource: DataSource)  = new RichDataSource(datasource)
 
-  implicit def enhanceStringContext(sc: StringContext) = new SQLStringContext(sc)
+  //implicit def enhanceStringContext(sc: StringContext) = new SQLStringContext(sc)
 
   implicit def enhancePlainSql(stmt: String) = SQLWithArgs(stmt, Seq.empty)
 
@@ -202,10 +202,13 @@ package object sql {
       if(rs.getObject(index)==null) None else Some(implicitly[JdbcValueAccessor[T]].passOut(rs, index))
   }
 
+  implicit class SQLStringContext(sc: StringContext) {
+    def sql(args: JdbcValue[_]*) = SQLWithArgs(sc.parts.mkString("?"), args)
 
-}
+    // SQL"" will validate the sql statement at compiler time
+    def SQL(args: JdbcValue[_]*): SQLWithArgs = macro  Macros.parseSQL
 
-package sql {
+  }
 
   case class SQLWithArgs(sql: String, args: Seq[JdbcValue[_]]) {
 
@@ -216,9 +219,6 @@ package sql {
 
   }
 
-  class SQLStringContext(sc: StringContext) {
-    def sql(args: JdbcValue[_]*) = SQLWithArgs(sc.parts.mkString("?"), args)
-  }
 
   /**
    * instead of using reflect mechanism, a bean maybe read field from ResultSet itself

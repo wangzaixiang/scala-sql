@@ -1,52 +1,16 @@
 package wangzx.scala_commons.sql
 
-import java.sql.ResultSet
+import java.io.FileInputStream
+import java.sql.{Connection, Driver, ResultSet}
+
+import scala.util.Properties
+//import java.util.Properties
+import javax.sql.DataSource
 
 import scala.language.experimental.macros
-import scala.reflect.macros.Context
 
 
 object Macros {
-
-//  case class User(name: String, age: Int, classRoom: Int = 1) {
-//    def this(b: Boolean) = this("wangzx", 40)
-//  }
-//
-//
-//
-//  /*
-//      override def from(rs: ResultSet): User = {
-//      val NAME = Field[String]("name")
-//      val AGE = Field[Int]("age")
-//      val CLASSROOM = Field[Int]("classRoom", Some("apply$default$3"))
-//
-//      User(NAME(rs), AGE(rs), CLASSROOM(rs))
-//    }
-//   */
-//
-//  case class Field[T](name: String) {
-//    def apply(rs: ResultSet): T = ???
-//  }
-//
-//  def fromRS(rs: ResultSet): User = macro fromRSMacro[User]
-//
-//  def fromRSMacro[A](c: Context)(rs: c.Tree): c.Tree = {
-//    import c.universe._
-//
-//    val tree =
-//    q"""
-//        import wangzx.test.Macros._
-//
-//        val NAME = Field[String]("name")
-//        val AGE = Field[Int]("age")
-//        val CLASSROOM = Field[Int]("classRoom", Some("apply$$default$$3") )
-//
-//        User( NAME($rs), AGE($rs), CLASSROOM($rs) )
-//     """
-//    println(tree)
-//
-//    tree
-//  }
 
   //def implictUserMapper: ResultSetMapper[User] = macro implictMapper[User]
   /*
@@ -71,11 +35,6 @@ object Macros {
     val t: c.WeakTypeTag[T] = implicitly[c.WeakTypeTag[T]]
     val companion = t.tpe.typeSymbol.asClass.companion
 
-//    println(s"companion = ${companion}")
-//    companion.asModule.typeSignature.decls.foreach(println);
-
-//    println(s" default = ${ companion.asModule.typeSignature.member( TermName("$lessinit$greater$default$3") ) } ")
-
     val constructor: c.universe.MethodSymbol = t.tpe.typeSymbol.asClass.primaryConstructor.asMethod
 
     var index = 0
@@ -97,23 +56,6 @@ object Macros {
       (q"""${newTerm}(rs)""", tree)
     }
 
-//    val defaultMethod: c.universe.Symbol = t.tpe.typeSymbol.asClass.companion.asModule.typeSignature.member(TermName("apply$default$3"))
-//
-//    val tree = q"""
-//       import wangzx.scala_commons.sql._
-//       import java.sql.ResultSet
-//
-//       new CaseClassResultSetMapper[$t]($companion) {
-//        val name = Field[String]("name")
-//        val age = Field[Int]("age")
-//        val classRoom = Field[Int]("classRoom", Some($companion.$defaultMethod))
-//
-//        override def from(rs: ResultSet): $t = {
-//          new $t( name(rs), age(rs), classRoom(rs) )
-//        }
-//       }
-//     """
-
     val tree =
       q"""
          import wangzx.scala_commons.sql._
@@ -131,6 +73,90 @@ object Macros {
 
 //    println(tree);
     tree
+  }
+
+  def parseSQL(c: reflect.macros.blackbox.Context)(args: c.Tree*): c.Tree = {
+    import c.universe._
+
+    val q"""$a(scala.StringContext.apply(..$literals))""" = c.prefix.tree
+
+    val it: c.Tree = c.enclosingClass
+    val db: String = it.symbol.annotations.flatMap { x =>
+      x.tree match {
+        case q"""new $t($name)""" if t.symbol.asClass.fullName == classOf[db].getName =>
+          val Literal(Constant(str: String)) = name
+          Some(str)
+        case _ => None
+      }
+    } match {
+      case Seq(name) => name
+      case _ => "default"
+    }
+
+
+    val x: List[Tree] = literals
+    //println(s"x type = ${x.getClass}")
+    // literals.children.foreach(println)
+
+    assert( x.forall( arg => arg.isInstanceOf[Literal] ) )
+    //val args2: c.Tree =
+
+    val stmt = x.map { case Literal(Constant(value: String)) => value }.mkString("?")
+
+    try {
+      SqlChecker.checkSqlGrammar(db, stmt, args.length)
+    }
+    catch {
+      case ex: Throwable =>
+        c.error(c.enclosingPosition, s"SQL grammar erorr ${ex.getMessage}")
+    }
+
+    q"""wangzx.scala_commons.sql.SQLWithArgs($stmt, Seq(..$args))"""
+  }
+
+  object SqlChecker {
+
+    // lazy val compilerDataSources = collection.mutable.Map[String, Connection]()
+    lazy val properties = {
+      val config = new java.util.Properties()
+      try {
+        config.load(new FileInputStream("scala-sql.properties"))
+        //config.list(System.out)
+      }
+      catch {
+        case ex: Throwable =>
+          System.err.println("can't load scala-sql.properties")
+      }
+      config
+    }
+    def getConnection(db: String): Connection = {
+        val url = properties.getProperty(s"${db}.url")
+        val user = properties.getProperty(s"${db}.user")
+        val password = properties.getProperty(s"${db}.password")
+        val driver = properties.getProperty(s"${db}.driver")
+
+        val driverObj = Class.forName(driver).newInstance().asInstanceOf[Driver]
+        val props = new java.util.Properties()
+        props.put("user", user)
+        props.put("password", password)
+
+        driverObj.connect(url, props)
+    }
+
+    def checkSqlGrammar(db: String, stmt: String, argc: Int): Unit = {
+      val conn = getConnection(db)
+      // conn.setReadOnly(true)
+      try {
+        conn.setAutoCommit(false)
+        val ps = conn.prepareStatement(s"explain $stmt")
+        for(i <- 1 to argc) ps.setNull(i, java.sql.Types.VARCHAR)
+        ps.executeQuery()
+      }
+      finally {
+        conn.rollback()
+        conn.close()
+      }
+    }
   }
 
 }
