@@ -1,11 +1,14 @@
 package wangzx.scala_commons.sql
 
 import java.sql._
-import java.lang.{Boolean=>JBoolean, Byte=>JByte, Short=>JShort, Integer=>JInteger, Long=>JLong}
-import java.lang.{Float=>JFloat, Double=>JDouble}
+import java.lang.{Boolean => JBoolean, Byte => JByte, Integer => JInteger, Long => JLong, Short => JShort}
+import java.lang.{Double => JDouble, Float => JFloat}
 import java.math.{BigDecimal => JBigDecimal}
-import java.io.InputStream
-import java.math
+import java.io.{InputStream, Reader}
+import java.net.URL
+import java.{math, sql, util}
+import java.util.Calendar
+
 import scala.Array
 import scala.reflect.ClassTag
 
@@ -139,7 +142,8 @@ object Row {
 
 }
 
-class Row(val cells: Seq[Row.Cell[_]]) {
+// make Row extends ResultSet so we can using JavaValueAccessor.
+class Row(val cells: Seq[Row.Cell[_]]) extends ResultSet {
   import Row._
 
   private lazy val cellsByName: Map[String, Cell[_]] = cells.map { cell =>
@@ -202,6 +206,168 @@ class Row(val cells: Seq[Row.Cell[_]]) {
   def getObject(index: Int): AnyRef = cell(index).getObject
   def getObject(key: String): AnyRef = cell(key).getObject
 
+  def get[T: JdbcValueAccessor](index: Int): T = implicitly[JdbcValueAccessor[T]].passOut(this, index)
+  def get[T: JdbcValueAccessor](key: String): T = implicitly[JdbcValueAccessor[T]].passOut(this, key)
 
+  //
+  def getBigDecimal(columnIndex: Int, scale: Int): JBigDecimal = ???
+  def getBigDecimal(columnLabel: String, scale: Int): JBigDecimal = ???
+  def getClob(columnIndex: Int): Clob = ???
+  def getClob(columnLabel: String): Clob = ???
+  def updateShort(columnIndex: Int, x: Short): Unit = ???
+  def updateShort(columnLabel: String, x: Short): Unit = ???
+  def isFirst: Boolean = ???
+  def wasNull(): Boolean = ???
+  def updateBytes(columnIndex: Int, x: Array[Byte]): Unit = ???
+  def updateBytes(columnLabel: String, x: Array[Byte]): Unit = ???
+  def getNString(columnIndex: Int): String = ???
+  def getNString(columnLabel: String): String = ???
+  def getNClob(columnIndex: Int): NClob = ???
+  def getNClob(columnLabel: String): NClob = ???
+  def getObject(columnIndex: Int, map: util.Map[String, Class[_]]): AnyRef = ???
+  def getObject(columnLabel: String, map: util.Map[String, Class[_]]): AnyRef = ???
+  def getObject[T](columnIndex: Int, `type`: Class[T]): T = ???
+  def getObject[T](columnLabel: String, `type`: Class[T]): T = ???
+  def updateByte(columnIndex: Int, x: Byte): Unit = ???
+  def updateByte(columnLabel: String, x: Byte): Unit = ???
+  def beforeFirst(): Unit = ???
+  def getRow: Int = ???
+  def afterLast(): Unit = ???
+  def refreshRow(): Unit = ???
+  def updateClob(columnIndex: Int, x: Clob): Unit = ???
+  def updateClob(columnLabel: String, x: Clob): Unit = ???
+  def updateClob(columnIndex: Int, reader: Reader, length: Long): Unit = ???
+  def updateClob(columnLabel: String, reader: Reader, length: Long): Unit = ???
+  def updateClob(columnIndex: Int, reader: Reader): Unit = ???
+  def updateClob(columnLabel: String, reader: Reader): Unit = ???
+  def getType: Int = ???
+  def updateArray(columnIndex: Int, x: sql.Array): Unit = ???
+  def updateArray(columnLabel: String, x: sql.Array): Unit = ???
+  def getMetaData: ResultSetMetaData = ???
+  def relative(rows: Int): Boolean = ???
+  def updateDate(columnIndex: Int, x: Date): Unit = ???
+  def updateDate(columnLabel: String, x: Date): Unit = ???
+  def getNCharacterStream(columnIndex: Int): Reader = ???
+  def getNCharacterStream(columnLabel: String): Reader = ???
+  def isLast: Boolean = ???
+  def getWarnings: SQLWarning = ???
+  def updateObject(columnIndex: Int, x: scala.Any, scaleOrLength: Int): Unit = ???
+  def updateObject(columnIndex: Int, x: scala.Any): Unit = ???
+  def updateObject(columnLabel: String, x: scala.Any, scaleOrLength: Int): Unit = ???
+  def updateObject(columnLabel: String, x: scala.Any): Unit = ???
+  def updateBlob(columnIndex: Int, x: Blob): Unit = ???
+  def updateBlob(columnLabel: String, x: Blob): Unit = ???
+  def updateBlob(columnIndex: Int, inputStream: InputStream, length: Long): Unit = ???
+  def updateBlob(columnLabel: String, inputStream: InputStream, length: Long): Unit = ???
+  def updateBlob(columnIndex: Int, inputStream: InputStream): Unit = ???
+  def updateBlob(columnLabel: String, inputStream: InputStream): Unit = ???
+  def updateRowId(columnIndex: Int, x: RowId): Unit = ???
+  def updateRowId(columnLabel: String, x: RowId): Unit = ???
+  def getDate(columnIndex: Int, cal: Calendar): Date = ???
+  def getDate(columnLabel: String, cal: Calendar): Date = ???
+  def close(): Unit = ???
+  def updateSQLXML(columnIndex: Int, xmlObject: SQLXML): Unit = ???
+  def updateSQLXML(columnLabel: String, xmlObject: SQLXML): Unit = ???
+  def moveToCurrentRow(): Unit = ???
+  def setFetchSize(rows: Int): Unit = ???
+  def updateTime(columnIndex: Int, x: Time): Unit = ???
+  def updateTime(columnLabel: String, x: Time): Unit = ???
+  def clearWarnings(): Unit = ???
+  def getCharacterStream(columnIndex: Int): Reader = ???
+  def getCharacterStream(columnLabel: String): Reader = ???
+  def updateTimestamp(columnIndex: Int, x: Timestamp): Unit = ???
+  def updateTimestamp(columnLabel: String, x: Timestamp): Unit = ???
+  def getBlob(columnIndex: Int): Blob = ???
+  def getBlob(columnLabel: String): Blob = ???
+  def rowDeleted(): Boolean = ???
+  def isAfterLast: Boolean = ???
+  def insertRow(): Unit = ???
+  def isClosed: Boolean = ???
+  def absolute(row: Int): Boolean = ???
+  def getUnicodeStream(columnIndex: Int): InputStream = ???
+  def getUnicodeStream(columnLabel: String): InputStream = ???
+  def updateFloat(columnIndex: Int, x: Float): Unit = ???
+  def updateFloat(columnLabel: String, x: Float): Unit = ???
+  def first(): Boolean = ???
+  def updateRow(): Unit = ???
+  def getCursorName: String = ???
+  def getHoldability: Int = ???
+  def getArray(columnIndex: Int): sql.Array = ???
+  def getArray(columnLabel: String): sql.Array = ???
+  def updateNClob(columnIndex: Int, nClob: NClob): Unit = ???
+  def updateNClob(columnLabel: String, nClob: NClob): Unit = ???
+  def updateNClob(columnIndex: Int, reader: Reader, length: Long): Unit = ???
+  def updateNClob(columnLabel: String, reader: Reader, length: Long): Unit = ???
+  def updateNClob(columnIndex: Int, reader: Reader): Unit = ???
+  def updateNClob(columnLabel: String, reader: Reader): Unit = ???
+  def getFetchSize: Int = ???
+  def getConcurrency: Int = ???
+  def setFetchDirection(direction: Int): Unit = ???
+  def updateAsciiStream(columnIndex: Int, x: InputStream, length: Int): Unit = ???
+  def updateAsciiStream(columnLabel: String, x: InputStream, length: Int): Unit = ???
+  def updateAsciiStream(columnIndex: Int, x: InputStream, length: Long): Unit = ???
+  def updateAsciiStream(columnLabel: String, x: InputStream, length: Long): Unit = ???
+  def updateAsciiStream(columnIndex: Int, x: InputStream): Unit = ???
+  def updateAsciiStream(columnLabel: String, x: InputStream): Unit = ???
+  def cancelRowUpdates(): Unit = ???
+  def getStatement: Statement = ???
+  def getFetchDirection: Int = ???
+  def last(): Boolean = ???
+  def updateNull(columnIndex: Int): Unit = ???
+  def updateNull(columnLabel: String): Unit = ???
+  def isBeforeFirst: Boolean = ???
+  def updateBoolean(columnIndex: Int, x: Boolean): Unit = ???
+  def updateBoolean(columnLabel: String, x: Boolean): Unit = ???
+  def getURL(columnIndex: Int): URL = ???
+  def getURL(columnLabel: String): URL = ???
+  def deleteRow(): Unit = ???
+  def getSQLXML(columnIndex: Int): SQLXML = ???
+  def getSQLXML(columnLabel: String): SQLXML = ???
+  def updateBigDecimal(columnIndex: Int, x: JBigDecimal): Unit = ???
+  def updateBigDecimal(columnLabel: String, x: JBigDecimal): Unit = ???
+  def rowInserted(): Boolean = ???
+  def updateInt(columnIndex: Int, x: Int): Unit = ???
+  def updateInt(columnLabel: String, x: Int): Unit = ???
+  def updateLong(columnIndex: Int, x: Long): Unit = ???
+  def updateLong(columnLabel: String, x: Long): Unit = ???
+  def next(): Boolean = ???
+  def getTime(columnIndex: Int, cal: Calendar): Time = ???
+  def getTime(columnLabel: String, cal: Calendar): Time = ???
+  def getRowId(columnIndex: Int): RowId = ???
+  def getRowId(columnLabel: String): RowId = ???
+  def findColumn(columnLabel: String): Int = ???
+  def rowUpdated(): Boolean = ???
+  def updateString(columnIndex: Int, x: String): Unit = ???
+  def updateString(columnLabel: String, x: String): Unit = ???
+  def getRef(columnIndex: Int): Ref = ???
+  def getRef(columnLabel: String): Ref = ???
+  def getTimestamp(columnIndex: Int, cal: Calendar): Timestamp = ???
+  def getTimestamp(columnLabel: String, cal: Calendar): Timestamp = ???
+  def updateRef(columnIndex: Int, x: Ref): Unit = ???
+  def updateRef(columnLabel: String, x: Ref): Unit = ???
+  def previous(): Boolean = ???
+  def moveToInsertRow(): Unit = ???
+  def updateNString(columnIndex: Int, nString: String): Unit = ???
+  def updateNString(columnLabel: String, nString: String): Unit = ???
+  def updateDouble(columnIndex: Int, x: Double): Unit = ???
+  def updateDouble(columnLabel: String, x: Double): Unit = ???
+  def updateNCharacterStream(columnIndex: Int, x: Reader, length: Long): Unit = ???
+  def updateNCharacterStream(columnLabel: String, reader: Reader, length: Long): Unit = ???
+  def updateNCharacterStream(columnIndex: Int, x: Reader): Unit = ???
+  def updateNCharacterStream(columnLabel: String, reader: Reader): Unit = ???
+  def updateCharacterStream(columnIndex: Int, x: Reader, length: Int): Unit = ???
+  def updateCharacterStream(columnLabel: String, reader: Reader, length: Int): Unit = ???
+  def updateCharacterStream(columnIndex: Int, x: Reader, length: Long): Unit = ???
+  def updateCharacterStream(columnLabel: String, reader: Reader, length: Long): Unit = ???
+  def updateCharacterStream(columnIndex: Int, x: Reader): Unit = ???
+  def updateCharacterStream(columnLabel: String, reader: Reader): Unit = ???
+  def updateBinaryStream(columnIndex: Int, x: InputStream, length: Int): Unit = ???
+  def updateBinaryStream(columnLabel: String, x: InputStream, length: Int): Unit = ???
+  def updateBinaryStream(columnIndex: Int, x: InputStream, length: Long): Unit = ???
+  def updateBinaryStream(columnLabel: String, x: InputStream, length: Long): Unit = ???
+  def updateBinaryStream(columnIndex: Int, x: InputStream): Unit = ???
+  def updateBinaryStream(columnLabel: String, x: InputStream): Unit = ???
+  def unwrap[T](iface: Class[T]): T = ???
+  def isWrapperFor(iface: Class[_]): Boolean = ???
 }
 
