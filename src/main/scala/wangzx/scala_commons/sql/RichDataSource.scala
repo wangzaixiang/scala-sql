@@ -26,13 +26,16 @@ class RichDataSource(val datasource: DataSource) {
   def executeUpdateWithGenerateKey(sql: SQLWithArgs)(processGenerateKeys: ResultSet => Unit): Int =
     withConnection(_.executeUpdateWithGenerateKey(sql)(processGenerateKeys))
 
+  def generateKey[T: JdbcValueAccessor](sql: SQLWithArgs): T =
+    withConnection(_.generateKey[T](sql))
+
   def eachRow[T : ResultSetMapper](sql: SQLWithArgs)(f: T => Unit) =
-    withConnection(_.eachRow(sql)(f))
+    withConnection(_.eachRow[T](sql)(f))
 
 
-  def rows[T : ResultSetMapper](sql: SQLWithArgs): List[T] = withConnection(_.rows(sql))
+  def rows[T : ResultSetMapper](sql: SQLWithArgs): List[T] = withConnection(_.rows[T](sql))
 
-  def row[T : ResultSetMapper](sql: SQLWithArgs): Option[T] = withConnection(_.row(sql))
+  def row[T : ResultSetMapper](sql: SQLWithArgs): Option[T] = withConnection(_.row[T](sql))
 
   def queryInt(sql: SQLWithArgs): Int = withConnection(_.queryInt(sql))
 

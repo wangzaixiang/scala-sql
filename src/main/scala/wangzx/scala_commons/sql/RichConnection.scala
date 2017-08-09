@@ -81,6 +81,18 @@ class RichConnection(val conn: Connection) {
     }
   }
 
+  def generateKey[T: JdbcValueAccessor](stmt: SQLWithArgs): T = {
+    var t: Option[T] = None
+
+    executeUpdateWithGenerateKey(stmt){ rs =>
+      if(rs.next)
+        t = Some( implicitly[JdbcValueAccessor[T]].passOut(rs, 1) )
+    }
+
+    assert( t.isDefined, s"the sql doesn't return a generated key but expected" )
+    t.get
+  }
+
   def eachRow[T : ResultSetMapper](sql: SQLWithArgs)(f: T => Unit) = withPreparedStatement(sql.sql){ prepared =>
 //    val prepared = conn.prepareStatement(sql.sql)
     if (sql.args != null) setStatementArgs(prepared, sql.args)

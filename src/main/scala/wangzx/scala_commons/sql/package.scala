@@ -13,8 +13,6 @@ package object sql {
 
   implicit def enhanceDataSource(datasource: DataSource)  = new RichDataSource(datasource)
 
-  //implicit def enhanceStringContext(sc: StringContext) = new SQLStringContext(sc)
-
   implicit def enhancePlainSql(stmt: String) = SQLWithArgs(stmt, Seq.empty)
 
   trait JdbcValueAccessor[T] {
@@ -71,11 +69,17 @@ package object sql {
     override def passOut(rs: ResultSet, index: Int): Boolean = rs.getBoolean(index)
     override def passOut(rs: ResultSet, name: String): Boolean = rs.getBoolean(name)
   }
+  implicit object ResultSetMapper_Boolean extends ResultSetMapper[Boolean] {
+    override def from(rs: ResultSet): Boolean = rs.getBoolean(1)
+  }
 
   implicit object JdbcValueAccessor_Byte extends JdbcValueAccessor[Byte] {
     override def passIn(stmt: PreparedStatement, index: Int, value: Byte): Unit = stmt.setByte(index, value)
     override def passOut(rs: ResultSet, index: Int): Byte = rs.getByte(index)
     override def passOut(rs: ResultSet, name: String): Byte = rs.getByte(name)
+  }
+  implicit object ResultSetMapper_Byte extends ResultSetMapper[Byte] {
+    override def from(rs: ResultSet): Byte = rs.getByte(1)
   }
 
   implicit object JdbcValueAccessor_Short extends JdbcValueAccessor[Short] {
@@ -83,11 +87,17 @@ package object sql {
     override def passOut(rs: ResultSet, index: Int): Short = rs.getShort(index)
     override def passOut(rs: ResultSet, name: String): Short = rs.getShort(name)
   }
+  implicit object ResulSetMapper_Short extends ResultSetMapper[Short] {
+    override def from(rs: ResultSet): Short = rs.getShort(1)
+  }
 
   implicit object JdbcValueAccessor_Int extends JdbcValueAccessor[Int] {
     override def passIn(stmt: PreparedStatement, index: Int, value: Int): Unit = stmt.setInt(index, value)
     override def passOut(rs: ResultSet, index: Int): Int = rs.getInt(index)
     override def passOut(rs: ResultSet, name: String): Int = rs.getInt(name)
+  }
+  implicit object ResultSetMapper_Int extends ResultSetMapper[Int] {
+    override def from(rs: ResultSet): Int = rs.getInt(1)
   }
 
   implicit object JdbcValueAccessor_Long extends JdbcValueAccessor[Long] {
@@ -95,11 +105,17 @@ package object sql {
     override def passOut(rs: ResultSet, index: Int): Long = rs.getLong(index)
     override def passOut(rs: ResultSet, name: String): Long = rs.getLong(name)
   }
+  implicit object ResultSetMapper_Long extends ResultSetMapper[Long] {
+    override def from(rs: ResultSet): Long = rs.getLong(1)
+  }
 
   implicit object JdbcValueAccessor_Float extends JdbcValueAccessor[Float] {
     override def passIn(stmt: PreparedStatement, index: Int, value: Float): Unit = stmt.setFloat(index, value)
     override def passOut(rs: ResultSet, index: Int): Float = rs.getFloat(index)
     override def passOut(rs: ResultSet, name: String): Float = rs.getFloat(name)
+  }
+  implicit object ResultSetMapper_Float extends ResultSetMapper[Float] {
+    override def from(rs: ResultSet): Float = rs.getFloat(1)
   }
 
   implicit object JdbcValueAccessor_Double extends JdbcValueAccessor[Double] {
@@ -107,11 +123,17 @@ package object sql {
     override def passOut(rs: ResultSet, index: Int): Double = rs.getDouble(index)
     override def passOut(rs: ResultSet, name: String): Double = rs.getDouble(name)
   }
+  implicit object ResulSetMapper_Double extends ResultSetMapper[Double] {
+    override def from(rs: ResultSet): Double = rs.getDouble(1)
+  }
 
   implicit object JdbcValueAccessor_String extends JdbcValueAccessor[String] {
     override def passIn(stmt: PreparedStatement, index: Int, value: String): Unit = stmt.setString(index, value)
     override def passOut(rs: ResultSet, index: Int): String = rs.getString(index)
     override def passOut(rs: ResultSet, name: String): String = rs.getString(name)
+  }
+  implicit object ResultSetMapper_String extends ResultSetMapper[String] {
+    override def from(rs: ResultSet): String = rs.getString(1)
   }
 
   implicit object JdbcValueAccessor_BigDecimal extends JdbcValueAccessor[java.math.BigDecimal] {
@@ -119,8 +141,9 @@ package object sql {
     override def passOut(rs: ResultSet, index: Int): java.math.BigDecimal = rs.getBigDecimal(index)
     override def passOut(rs: ResultSet, name: String): java.math.BigDecimal = rs.getBigDecimal(name)
   }
-
-  // TODO Date Time Timestamp
+  implicit object ResultSetMapper_BigDecimal extends ResultSetMapper[java.math.BigDecimal] {
+    override def from(rs: ResultSet): java.math.BigDecimal = rs.getBigDecimal(1)
+  }
 
   implicit object JdbcValueAccessor_Date extends JdbcValueAccessor[java.util.Date] {
     override def passIn(stmt: PreparedStatement, index: Int, value: Date): Unit = stmt.setTimestamp(index, new Timestamp(value.getTime))
@@ -135,6 +158,9 @@ package object sql {
       case null => null
     }
   }
+  implicit object ResultSetMapper_Date extends ResultSetMapper[java.util.Date] {
+    override def from(rs: ResultSet): Date = new java.util.Date(rs.getTimestamp(1).getTime)
+  }
 
   implicit object JdbcValueAccessor_Date2 extends JdbcValueAccessor[java.sql.Date] {
     override def passIn(stmt: PreparedStatement, index: Int, value: java.sql.Date): Unit = stmt.setDate(index, value)
@@ -142,6 +168,9 @@ package object sql {
     override def passOut(rs: ResultSet, index: Int): java.sql.Date = rs.getDate(index)
 
     override def passOut(rs: ResultSet, name: String): java.sql.Date = rs.getDate(name)
+  }
+  implicit object ResultSetMapper_Date2 extends ResultSetMapper[java.sql.Date] {
+    override def from(rs: ResultSet): java.sql.Date = rs.getDate(1)
   }
 
   implicit object JdbcValueAccessor_Timestamp extends JdbcValueAccessor[Timestamp] {
@@ -152,11 +181,25 @@ package object sql {
     override def passOut(rs: ResultSet, name: String): Timestamp = rs.getTimestamp(name)
   }
 
+  implicit object ResultSetMapper_Timestamp extends ResultSetMapper[Timestamp] {
+    override def from(rs: ResultSet): Timestamp = rs.getTimestamp(1)
+  }
+
   // extensions
   implicit object JdbcValueAccessor_ScalaBigDecimal extends JdbcValueAccessor[BigDecimal] {
     override def passIn(stmt: PreparedStatement, index: Int, value: BigDecimal): Unit = stmt.setBigDecimal(index, value.bigDecimal)
-    override def passOut(rs: ResultSet, index: Int): BigDecimal = BigDecimal(rs.getBigDecimal(index))
-    override def passOut(rs: ResultSet, name: String): BigDecimal = BigDecimal(rs.getBigDecimal(name))
+    override def passOut(rs: ResultSet, index: Int): BigDecimal = {
+      val it = rs.getBigDecimal(index); if(it != null) BigDecimal(it) else null
+    }
+    override def passOut(rs: ResultSet, name: String): BigDecimal = {
+      val it = rs.getBigDecimal(name); if(it != null) BigDecimal(it) else null
+    }
+  }
+
+  implicit object ResultSetMapper_ScalaBigDecimal extends ResultSetMapper[BigDecimal] {
+    override def from(rs: ResultSet): BigDecimal = {
+      val it = rs.getBigDecimal(1); if(it != null) BigDecimal(it) else null
+    }
   }
 
   class JdbcValueAccessor_Option[T: JdbcValueAccessor] extends JdbcValueAccessor[Option[T]] {

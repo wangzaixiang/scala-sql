@@ -108,6 +108,7 @@ object Macros {
     }
     catch {
       case ex: Throwable =>
+        //ex.printStackTrace()
         c.error(c.enclosingPosition, s"SQL grammar erorr ${ex.getMessage}")
     }
 
@@ -119,14 +120,23 @@ object Macros {
     // lazy val compilerDataSources = collection.mutable.Map[String, Connection]()
     lazy val properties = {
       val config = new java.util.Properties()
+      val path = s"${System.getProperty("user.dir")}/scala-sql.properties"
       try {
-        config.load(new FileInputStream("scala-sql.properties"))
-        //config.list(System.out)
+        config.load(new FileInputStream(path))
       }
       catch {
         case ex: Throwable =>
-          System.err.println("can't load scala-sql.properties")
+          println(s"can't load $path")
+          val path2 = s"${System.getProperty("user.home")}/.scala-sql.properties"
+          try {
+            config.load(new FileInputStream(path2))
+          }
+          catch {
+            case ex: Throwable =>
+              println(s"can't load $path2")
+          }
       }
+
       config
     }
     def getConnection(db: String): Connection = {
