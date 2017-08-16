@@ -208,14 +208,18 @@ package object sql {
       case None => stmt.setObject(index, null) // TODO or setNull
     }
 
-    override def passOut(rs: ResultSet, index: Int): Option[T] = implicitly[JdbcValueAccessor[T]].passOut(rs, index) match {
-      case null => None
-      case x => Some(x)
+    override def passOut(rs: ResultSet, index: Int): Option[T] = {
+      if( rs.getObject(index) == null) None
+      else {
+        Some( implicitly[JdbcValueAccessor[T]].passOut(rs, index) )
+      }
     }
 
-    override def passOut(rs: ResultSet, name: String): Option[T] = implicitly[JdbcValueAccessor[T]].passOut(rs, name) match {
-      case null => None
-      case x => Some(x)
+    override def passOut(rs: ResultSet, name: String): Option[T] = {
+      if( rs.getObject(name) == null) None
+      else {
+        Some( implicitly[JdbcValueAccessor[T]].passOut(rs, name) )
+      }
     }
   }
 
