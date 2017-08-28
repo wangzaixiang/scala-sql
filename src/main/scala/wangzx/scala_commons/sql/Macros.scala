@@ -33,6 +33,8 @@ object Macros {
     import c.universe._
 
     val t: c.WeakTypeTag[T] = implicitly[c.WeakTypeTag[T]]
+    assert( t.tpe.typeSymbol.asClass.isCaseClass, s"only support CaseClass, but ${t.tpe.typeSymbol.fullName} is not" )
+
     val companion = t.tpe.typeSymbol.asClass.companion
 
     val constructor: c.universe.MethodSymbol = t.tpe.typeSymbol.asClass.primaryConstructor.asMethod
@@ -103,13 +105,28 @@ object Macros {
 
     val stmt = x.map { case Literal(Constant(value: String)) => value }.mkString("?")
 
-    try {
-      SqlChecker.checkSqlGrammar(db, stmt, args.length)
+    // to disable sql checking(eg, no local database exists, define the -Dscala_sql.check=false
+    // or using env SCALA_SQL_CHECK=false
+    val checkSqlFlag = {
+      System.getProperty("scala_sql.check") match {
+        case "false" | "FALSE" => false
+        case null =>
+          System.getenv("SCALA_SQL_CHECK") match {
+            case "false" | "FALSE" => false
+            case _ => true
+          }
+        case _ => true
+      }
     }
-    catch {
-      case ex: Throwable =>
-        //ex.printStackTrace()
-        c.error(c.enclosingPosition, s"SQL grammar erorr ${ex.getMessage}")
+    if(checkSqlFlag) {
+      try {
+        SqlChecker.checkSqlGrammar(db, stmt, args.length)
+      }
+      catch {
+        case ex: Throwable =>
+          //ex.printStackTrace()
+          c.error(c.enclosingPosition, s"SQL grammar erorr ${ex.getMessage}")
+      }
     }
 
     q"""wangzx.scala_commons.sql.SQLWithArgs($stmt, Seq(..$args))"""
