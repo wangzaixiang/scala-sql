@@ -186,4 +186,13 @@ object Macros {
     }
   }
 
+  def desugar(a: Any): String = macro desugarImpl
+
+  def desugarImpl(c: scala.reflect.macros.whitebox.Context)(a: c.Tree) = {
+    import c.universe._
+
+    val s = show(a)
+    q"""$s"""
+  }
+
 }

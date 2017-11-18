@@ -37,12 +37,37 @@ package object sql {
 
   abstract class CaseClassResultSetMapper[T] extends ResultSetMapper[T] {
 
+    // cammel case mapping support such as userId -> user_id, postURL -> post_url
     case class Field[T: JdbcValueAccessor](name: String, default: Option[T] = None) {
       // val method: Option[java.lang.reflect.Method] = defaultName.map ( companion.getClass.getMethod(_) )
+      val underscoreName: Option[String] = {
+        val sb = new StringBuilder
+        var i = 0
+        var lastChar: Char = 0
+        while(i < name.length) {
+          val ch = name.charAt(i)
+          if(i == 0) sb.append(ch)
+          else {
+            if(Character.isLowerCase(lastChar) && Character.isUpperCase(ch)) {
+              sb.append('_')
+              sb.append(ch)
+            }
+            else sb.append(ch)
+          }
+          lastChar = ch
+          i += 1
+        }
+        val newName = sb.toString
+        if(newName != name) Some(newName)
+        else None
+      }
 
       def apply(rs: ResultSetEx): T = {
         if ( rs hasColumn name ){
           rs.get[T](name)
+        }
+        else if(underscoreName.nonEmpty && rs.hasColumn(underscoreName.get)) {
+          rs.get[T](underscoreName.get)
         }
         else {
           default match {
@@ -240,6 +265,7 @@ package object sql {
     lazy val columns: Set[String] = (for(i <- 1 to meta.getColumnCount) yield meta.getColumnLabel(i)).toSet
     lazy val columnsUpperCase: Set[String] = columns.map(_.toUpperCase)
 
+    // TODO if database is case-sensitive, maybe need check
     def hasColumn(column: String) = columnsUpperCase.contains(column.toUpperCase)
 
     def get[T: JdbcValueAccessor](index: Int): T = implicitly[JdbcValueAccessor[T]].passOut(rs, index)
@@ -264,14 +290,6 @@ package object sql {
 
     def +(other: String): SQLWithArgs = SQLWithArgs(sql + other, args)
 
-  }
-
-
-  /**
-   * instead of using reflect mechanism, a bean maybe read field from ResultSet itself
-   */
-  trait ResultSetConvertable {
-    def fromResultSet(rs: ResultSet)
   }
 
 }
