@@ -49,6 +49,7 @@ object BeanBuilder {
     }
 
     // BOX[F] => Box[T], f.map( F=>T )
+    // TODO support more F=>T
     def boxMap(): Option[c.Tree] = {
       (F, T) match {
         case ( TypeRef(p1, s1, args1), TypeRef(p2, s2, args2) ) if p1 == p2 && args1.length == args2.length && args1.length == 1 =>
@@ -80,6 +81,33 @@ object BeanBuilder {
       }
     }
 
+    // T.apply(f)
+    def simpleApply(): Option[c.Tree] = {
+      if(T.typeSymbol.companion != null) {
+        val companion = T.typeSymbol.companion
+        c.typecheck(q"""$companion.apply($f): $T""", silent = true) match {
+          case EmptyTree => None
+          case x@_ => Some(x)
+        }
+      }
+      else None
+    }
+
+    // T.apply( F.unapply(f) )
+    def applyUnapply(): Option[c.Tree] = {
+      val Fcomp = F.typeSymbol.companion
+      val Tcomp = T.typeSymbol.companion
+
+      if(Fcomp != null && Tcomp != null) {
+        c.typecheck(
+          q"""val fx = $Fcomp.unapply($f).get; $Tcomp.apply( fx ): $T""", silent = true) match {
+          case EmptyTree => None
+          case tree@_ => Some(tree)
+        }
+      }
+      else None
+    }
+
     // recusive call Build[T](srcField) if it works
     def tryBuild(): Option[c.Tree] = {
       c.typecheck(q"""import ${c.prefix}._; build[$T]($f)() """, silent = true) match {
@@ -94,7 +122,14 @@ object BeanBuilder {
       EmptyTree
     }
 
-    directConvert.orElse(implicitConvert).orElse(boxMap).orElse(implicitCopyTo).orElse(tryBuild).getOrElse(failed)
+    directConvert
+      .orElse(implicitConvert)
+      .orElse(boxMap)
+      .orElse(implicitCopyTo)
+      .orElse(simpleApply)
+      .orElse(applyUnapply)
+      .orElse(tryBuild)
+      .getOrElse(failed)
   }
 
   def buildImpl[T: c.WeakTypeTag](c: scala.reflect.macros.blackbox.Context)(sources: c.Tree*)(adds: c.Tree*): c.Tree = {
