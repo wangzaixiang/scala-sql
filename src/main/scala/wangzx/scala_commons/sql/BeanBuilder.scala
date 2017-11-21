@@ -81,43 +81,43 @@ object BeanBuilder {
       }
     }
 
-    // T.apply(f)
-    def simpleApply(): Option[c.Tree] = {
-      if(T.typeSymbol.companion != null) {
-        val companion = T.typeSymbol.companion
-        c.typecheck(q"""$companion.apply($f): $T""", silent = true) match {
-          case EmptyTree => None
-          case x@_ => Some(x)
-        }
-      }
-      else None
-    }
-
-    def simpleUnapply(): Option[c.Tree] ={
-      if(F.typeSymbol.companion != null) {
-        val companion = F.typeSymbol.companion
-        c.typecheck(q"""$companion.unapply($f).get:$T""", silent = true) match {
-          case EmptyTree => None
-          case x@_ => Some(x)
-        }
-      }
-      else None
-    }
-
-    // T.apply( F.unapply(f) )
-    def applyUnapply(): Option[c.Tree] = {
-      val Fcomp = F.typeSymbol.companion
-      val Tcomp = T.typeSymbol.companion
-
-      if(Fcomp != null && Tcomp != null) {
-        c.typecheck(
-          q"""val fx = $Fcomp.unapply($f).get; $Tcomp.apply( fx ): $T""", silent = true) match {
-          case EmptyTree => None
-          case tree@_ => Some(tree)
-        }
-      }
-      else None
-    }
+//    // T.apply(f)
+//    def simpleApply(): Option[c.Tree] = {
+//      if(T.typeSymbol.companion != null) {
+//        val companion = T.typeSymbol.companion
+//        c.typecheck(q"""$companion.apply($f): $T""", silent = true) match {
+//          case EmptyTree => None
+//          case x@_ => Some(x)
+//        }
+//      }
+//      else None
+//    }
+//
+//    def simpleUnapply(): Option[c.Tree] ={
+//      if(F.typeSymbol.companion != null) {
+//        val companion = F.typeSymbol.companion
+//        c.typecheck(q"""$companion.unapply($f).get:$T""", silent = true) match {
+//          case EmptyTree => None
+//          case x@_ => Some(x)
+//        }
+//      }
+//      else None
+//    }
+//
+//    // T.apply( F.unapply(f) )
+//    def applyUnapply(): Option[c.Tree] = {
+//      val Fcomp = F.typeSymbol.companion
+//      val Tcomp = T.typeSymbol.companion
+//
+//      if(Fcomp != null && Tcomp != null) {
+//        c.typecheck(
+//          q"""val fx = $Fcomp.unapply($f).get; $Tcomp.apply( fx ): $T""", silent = true) match {
+//          case EmptyTree => None
+//          case tree@_ => Some(tree)
+//        }
+//      }
+//      else None
+//    }
 
     // recusive call Build[T](srcField) if it works
     def tryBuild(): Option[c.Tree] = {
@@ -137,9 +137,9 @@ object BeanBuilder {
       .orElse(implicitConvert)
       .orElse(boxMap)
       .orElse(implicitCopyTo)
-      .orElse(simpleApply)
-      .orElse(simpleUnapply)
-      .orElse(applyUnapply)
+//      .orElse(simpleApply)
+//      .orElse(simpleUnapply)
+//      .orElse(applyUnapply)
       .orElse(tryBuild)
       .getOrElse(failed)
   }
