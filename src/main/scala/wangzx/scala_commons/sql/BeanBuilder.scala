@@ -93,6 +93,17 @@ object BeanBuilder {
       else None
     }
 
+    def simpleUnapply(): Option[c.Tree] ={
+      if(F.typeSymbol.companion != null) {
+        val companion = F.typeSymbol.companion
+        c.typecheck(q"""$companion.unapply($f).get:$T""", silent = true) match {
+          case EmptyTree => None
+          case x@_ => Some(x)
+        }
+      }
+      else None
+    }
+
     // T.apply( F.unapply(f) )
     def applyUnapply(): Option[c.Tree] = {
       val Fcomp = F.typeSymbol.companion
@@ -127,6 +138,7 @@ object BeanBuilder {
       .orElse(boxMap)
       .orElse(implicitCopyTo)
       .orElse(simpleApply)
+      .orElse(simpleUnapply)
       .orElse(applyUnapply)
       .orElse(tryBuild)
       .getOrElse(failed)

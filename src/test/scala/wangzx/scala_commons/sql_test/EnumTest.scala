@@ -66,6 +66,8 @@ object EnumTest {
     id: Int,
     orderNo: String,
     orderStatus: TOrderStatus
+//    orderStatus: Int
+//      orderStatus: Option[Int]    // not works
   )
 
   def main(args: Array[String]): Unit = {
