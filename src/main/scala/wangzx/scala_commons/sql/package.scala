@@ -1,7 +1,7 @@
 package wangzx.scala_commons
 
 import javax.sql.DataSource
-import java.sql.{Connection, PreparedStatement, ResultSet, Timestamp}
+import java.sql.{Blob, Clob, Connection, PreparedStatement, ResultSet, Timestamp}
 import java.util.Date
 
 import scala.language.implicitConversions
@@ -248,16 +248,28 @@ package object sql {
     }
   }
 
-  //  implicit def aaa[T: Manifest] =
+  implicit object JdbcValueAccessor_ArrayBytes extends JdbcValueAccessor[Array[Byte]] {
+    override def passIn(stmt: PreparedStatement, index: Int, value: Array[Byte]): Unit = stmt.setBytes(index, value)
 
-  implicit def intEnum2JdbcValue[T](enum: IntEnum[T]): JdbcValue[IntEnum[T]] = {
-    val accessor = new JdbcValueAccessor[IntEnum[T]] {
-      override def passIn(stmt: PreparedStatement, index: Int, value: IntEnum[T]): Unit =
-        stmt.setInt(index, value.code())
-      override def passOut(rs: ResultSet, index: Int): IntEnum[T] = ???
-      override def passOut(rs: ResultSet, name: String): IntEnum[T] = ???
-    }
-    JdbcValue(enum)(accessor)
+    override def passOut(rs: ResultSet, index: Int): Array[Byte] = rs.getBytes(index)
+
+    override def passOut(rs: ResultSet, name: String): Array[Byte] = rs.getBytes(name)
+  }
+
+  implicit object JdbcValueAccessor_Blob extends  JdbcValueAccessor[Blob] {
+    override def passIn(stmt: PreparedStatement, index: Int, value: Blob): Unit = stmt.setBlob(index, value)
+
+    override def passOut(rs: ResultSet, index: Int): Blob = rs.getBlob(index)
+
+    override def passOut(rs: ResultSet, name: String): Blob = rs.getBlob(name)
+  }
+
+  implicit object JdbcValueAccessor_Clob extends JdbcValueAccessor[Clob] {
+    override def passIn(stmt: PreparedStatement, index: Int, value: Clob): Unit = stmt.setClob(index, value)
+
+    override def passOut(rs: ResultSet, index: Int): Clob = rs.getClob(index)
+
+    override def passOut(rs: ResultSet, name: String): Clob = rs.getClob(name)
   }
 
   implicit class ResultSetEx(rs: ResultSet) {
