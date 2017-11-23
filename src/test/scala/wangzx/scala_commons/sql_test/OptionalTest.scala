@@ -20,30 +20,30 @@ class Employee {
 
 }
 
-class OptionalTest {
-
-  val dataSource = SampleDB.dataSource
-
-  @Test
-  def test1(): Unit = {
-
-    dataSource.executeUpdate(
-      """
-        delete from users where 1 = 1;
-
-        insert into users values('user1', 'wangzaixiang@gmail.com', 40);
-        insert into users values('user2', null, null);
-      """)
-    dataSource.rows[Employee]("select * from users order by name") match {
-      case x @ List(row1, row2) =>
-        assert(row1.email == Some("wangzaixiang@gmail.com"))
-        assert(row1.age == Some(40))
-
-        assert(row2.email == None)
-        assert(row2.age == None)
-    }
-
-
-  }
-
-}
+//class OptionalTest {
+//
+//  val dataSource = SampleDB.dataSource
+//
+//  @Test
+//  def test1(): Unit = {
+//
+//    dataSource.executeUpdate(
+//      """
+//        delete from users where 1 = 1;
+//
+//        insert into users values('user1', 'wangzaixiang@gmail.com', 40);
+//        insert into users values('user2', null, null);
+//      """)
+//    dataSource.rows[Employee]("select * from users order by name") match {
+//      case x @ List(row1, row2) =>
+//        assert(row1.email == Some("wangzaixiang@gmail.com"))
+//        assert(row1.age == Some(40))
+//
+//        assert(row2.email == None)
+//        assert(row2.age == None)
+//    }
+//
+//
+//  }
+//
+//}

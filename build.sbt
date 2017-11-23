@@ -2,14 +2,15 @@ organization := "com.github.wangzaixiang"
 
 name := "scala-sql"
 
-version := "1.0.6"
+version := "2.0.1"
 
-scalaVersion := "2.11.8"
+scalaVersion := "2.12.4"
 
-crossScalaVersions := Seq("2.11.8", "2.12.0")
+crossScalaVersions := Seq("2.11.11", "2.12.4")
 
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.9",
+  "org.scala-lang" % "scala-reflect" % scalaVersion.value,
   "com.h2database" % "h2" % "1.4.184" % "test",
   "junit" % "junit" % "4.12" % "test",
   "ch.qos.logback" % "logback-classic" % "1.1.3" % "test",
@@ -38,10 +39,6 @@ pomExtra := (
         <distribution>repo</distribution>
       </license>
     </licenses>
-    <scm>
-      <url>https://github.com/wangzaixiang/scala-sql.git</url>
-      <connection>scm:git:git@github.com:wangzaixiang/scala-sql.git</connection>
-    </scm>
     <developers>
       <developer>
         <id>wangzaixiang</id>
