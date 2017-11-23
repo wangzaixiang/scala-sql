@@ -1,6 +1,8 @@
 package wangzx.scala_commons.sql_test
 
-import wangzx.scala_commons.sql.BeanBuilder
+import wangzx.scala_commons.sql.{BeanBuilder, ResultSetMapper}
+
+import scala.language.implicitConversions
 
 object BuilderTest {
 
@@ -39,10 +41,11 @@ object BuilderTest {
 
     val someStr = Some("123")
     //val someInt = someStr.copyTo[Int]
+    val userMapper: ResultSetMapper[PersonAddress] = ResultSetMapper.material[PersonAddress]
 
     //val dady = Person("120", "wangzx", Some("120"), PersonAddress("gd", "gz"))
     val person = Person("123", "wangzhx", List("123"), PersonAddress("gd", "gz"))
-    val user = BeanBuilder.build[User](person)("score"->Some("100"))
+    val user = BeanBuilder.build[User](person)("score"->Some(100))
 
     assert( user == User(123, "wangzhx", List(123), UserAddress("gd", "gz"), Some(100)))
   }

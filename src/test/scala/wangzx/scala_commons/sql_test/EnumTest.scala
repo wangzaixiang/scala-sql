@@ -2,6 +2,7 @@ package wangzx.scala_commons.sql_test
 
 import java.sql.{PreparedStatement, ResultSet}
 import javax.sql.DataSource
+import scala.language.implicitConversions
 
 import wangzx.scala_commons.sql.DbEnum
 import wangzx.scala_commons.sql._
@@ -21,21 +22,15 @@ object EnumTest {
       case 2 => CANCELED
       case _ => new TOrderStatus(id, s"<$id>")
     }
-
-    def unapply(arg: TOrderStatus): Option[Int] = Some(arg.id)
   }
 
 
   object OrderStatus {
-
     val NEW = new OrderStatus(0, "NEW")
-
     val CONFIRMED = new OrderStatus(1, "Confirmed")
-
     val CANCELED = new OrderStatus(2, "Canceled")
 
     def unknowne(id: Int) = new OrderStatus(id, s"<$id>")
-
     def valueOf(id: Int): OrderStatus = id match {
       case 0 => NEW
       case 1 => CONFIRMED
@@ -43,11 +38,7 @@ object EnumTest {
       case _ => unknowne(id)
     }
 
-    def unapply(arg: OrderStatus): Option[Int] = Some(arg.id)
-    def apply(id: Int): OrderStatus = valueOf(id)
-
     implicit object Accessor extends DbEnumJdbcValueAccessor[OrderStatus](valueOf)
-
   }
   class OrderStatus private(val id:Int, val name:String) extends DbEnum
 
@@ -58,7 +49,7 @@ object EnumTest {
     orderStatus: OrderStatus
   )
   object Order {
-    implicit val resultSetMapper: ResultSetMapper[Order] = ResultSetMapper.meterial[Order]
+    implicit val resultSetMapper: ResultSetMapper[Order] = ResultSetMapper.material[Order]
   }
   
   case class TOrder
@@ -70,14 +61,13 @@ object EnumTest {
 //      orderStatus: Option[Int]    // not works
   )
 
+  implicit def orderStatus2TOrderStatus(obj: OrderStatus) = TOrderStatus(obj.id)
+  implicit def torderStatus2OrderStatus(obj: TOrderStatus) = OrderStatus.valueOf(obj.id)
+
   def main(args: Array[String]): Unit = {
     val dataSource: DataSource = null
 
     val orderStatus: OrderStatus = OrderStatus.NEW
-
-    orderStatus match {
-      case OrderStatus(x: Int) =>  println(x)
-    }
 
     println(s"orderStatus = $orderStatus")
 

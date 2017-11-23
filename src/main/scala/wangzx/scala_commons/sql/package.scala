@@ -296,8 +296,14 @@ package object sql {
   }
 
   implicit class ResultSetEx(rs: ResultSet) {
-    lazy val meta = rs.getMetaData
-    lazy val columns: Set[String] = (for(i <- 1 to meta.getColumnCount) yield meta.getColumnLabel(i)).toSet
+
+    lazy val columns: Set[String] = rs match {
+      case row: Row => row.cells.map(_.name).toSet
+      case _ =>
+        val meta = rs.getMetaData
+        (for (i <- 1 to meta.getColumnCount) yield meta.getColumnLabel(i)).toSet
+    }
+
     lazy val columnsUpperCase: Set[String] = columns.map(_.toUpperCase)
 
     // TODO if database is case-sensitive, maybe need check
