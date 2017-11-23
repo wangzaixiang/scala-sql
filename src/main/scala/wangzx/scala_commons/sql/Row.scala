@@ -18,7 +18,7 @@ import scala.reflect.ClassTag
 object Row {
 
   sealed abstract class Cell[T](val name: String, val sqltype: Int, val value: T) {
-    def ??? = throw new UnsupportedOperationException
+    @inline def ??? = throw new UnsupportedOperationException
     def getString: String = if (value == null) null else value.toString
     def getLong: Long  = ???
     def getInt: Int = getLong.toInt
@@ -109,6 +109,9 @@ object Row {
     override def getTimestamp = null
     override def getBytes = null
   }
+  class Cell_???(name: String, sqltype: Int) extends Cell[Unit](name, sqltype, ()) {
+    override def getString: String = ???
+  }
 
   def resultSetToRow(meta: ResultSetMetaData, rs: ResultSet): Row = {
     val cells: Seq[Cell[_]] = {
@@ -130,6 +133,7 @@ object Row {
           case Types.TINYINT | Types.SMALLINT | Types.INTEGER | Types.BIGINT => new LongCell(name, sqltype, rs.getLong(i))
           case Types.TIME => new TimeCell(name, sqltype, rs.getTime(i))
           case Types.TIMESTAMP => new TimestampCell(name, sqltype, rs.getTimestamp(i))
+          case _ => new Cell_???(name, sqltype) // no error, but that's is not accessable
         }
       }
     }

@@ -7,14 +7,41 @@ import java.util.Date
 import scala.language.implicitConversions
 import scala.language.experimental.macros
 
-package object sql {
+package sql {
 
-  implicit def enhanceConnection(conn: Connection) = new RichConnection(conn)
+  /**
+    * wrap a sql"select * from table where id = $id" object
+    */
+  case class SQLWithArgs(sql: String, args: Seq[JdbcValue[_]]) {
 
-  implicit def enhanceDataSource(datasource: DataSource)  = new RichDataSource(datasource)
+    def +(other: SQLWithArgs): SQLWithArgs =
+      SQLWithArgs(sql + other.sql, args ++ other.args)
 
-  implicit def enhancePlainSql(stmt: String) = SQLWithArgs(stmt, Seq.empty)
+    def +(other: String): SQLWithArgs = SQLWithArgs(sql + other, args)
 
+  }
+
+  /**
+    * for values(of type T) to passed into Statement or passed out from ResultSet, it should has a contxt bound of
+    * JdbcValueAccessor[T]
+    *
+    * <ul> package wangzx.scala_commons.sql prdefined a lot of pre-defined implementation for the jdbc value types:
+    * <li> boolean, byte, short, Int, Long, Float, Double, BigDecimal, scala.BigDecimal
+    * <li> String
+    * <li> Date, Time, Timestamp
+    * <li> Blob, Clob, byte[]
+    * <li> Option[T] if T has JdbcValueAccessor context bounded
+    * </ul>
+    *
+    * <ul>
+    * developer can define your's value type such as a MyDate which stored as database `Date`, you need only define
+    * an implicit value of JdbcValueAccessor[MyDate], then you can:
+    * <li> pass in statement using sql"... where date_field = $myDate"
+    * <li> passout from ResultSet, using rs.get[MyDate](field index or name)
+    * <li> mapping to a field of other CaseClass such as User, and then using rows[User](sql)
+    * <li> mapping to a Row object and rows[Row](sql), and then using row.get[MyDate](field index of name).
+    * </ul>
+    */
   trait JdbcValueAccessor[T] {
     def passIn(stmt: PreparedStatement, index: Int, value: T)
     def passOut(rs: ResultSet, index: Int): T
@@ -27,57 +54,53 @@ package object sql {
     implicit def materialOption[T : JdbcValueAccessor]: JdbcValueAccessor[Option[T]] = new JdbcValueAccessor_Option[T]
   }
 
+  /**
+    * any record level(a table row) having a ResultSetMapper context bound can used in `rows[T](sql)`
+    *
+    * the scala-sql library provide a Macro to automate generate the implementation for a given case class T
+    * if all it's field is JdbcValueAccess-able(having a JdbcValueAccess context bound).
+    *
+    * since the macro will generate a ResultSetMapper class for you anytime if there is not an explicit imported implicit value,
+    * maybe a lot of anonymous class will be generated. that is no problem but a bigger jar. to avoid this problem, you can
+    * define a implicit ResultSetMappper value in the Case Class's companion object.
+    *
+    * <pre>
+    *   case class User(name: String, age: Int)
+    *   object User {
+    *     implicit val resultSetmapper = ResultSetMapper.material[User]
+    *   }
+    * </pre>
+    */
   trait ResultSetMapper[T] {
     def from(rs: ResultSet): T
   }
 
   object ResultSetMapper {
-    implicit def meterial[T]: ResultSetMapper[T] = macro Macros.generateCaseClassResultSetMapper[T]
+    implicit def material[T]: ResultSetMapper[T] = macro Macros.generateCaseClassResultSetMapper[T]
   }
 
-  abstract class CaseClassResultSetMapper[T] extends ResultSetMapper[T] {
+}
 
-    // cammel case mapping support such as userId -> user_id, postURL -> post_url
-    case class Field[T: JdbcValueAccessor](name: String, default: Option[T] = None) {
-      // val method: Option[java.lang.reflect.Method] = defaultName.map ( companion.getClass.getMethod(_) )
-      val underscoreName: Option[String] = {
-        val sb = new StringBuilder
-        var i = 0
-        var lastChar: Char = 0
-        while(i < name.length) {
-          val ch = name.charAt(i)
-          if(i == 0) sb.append(ch)
-          else {
-            if(Character.isLowerCase(lastChar) && Character.isUpperCase(ch)) {
-              sb.append('_')
-              sb.append(ch)
-            }
-            else sb.append(ch)
-          }
-          lastChar = ch
-          i += 1
-        }
-        val newName = sb.toString
-        if(newName != name) Some(newName)
-        else None
-      }
+package object sql {
 
-      def apply(rs: ResultSetEx): T = {
-        if ( rs hasColumn name ){
-          rs.get[T](name)
-        }
-        else if(underscoreName.nonEmpty && rs.hasColumn(underscoreName.get)) {
-          rs.get[T](underscoreName.get)
-        }
-        else {
-          default match {
-            case Some(m) => m
-            case None => throw new RuntimeException(s"The ResultSet have no field $name but it is required")
-          }
-        }
-      }
-    }
+ implicit class SQLStringContext(sc: StringContext) {
+    def sql(args: JdbcValue[_]*) = SQLWithArgs(sc.parts.mkString("?"), args)
+
+    /**
+     * SQL"" will validate the sql statement at compiler time.
+     */
+    def SQL(args: JdbcValue[_]*): SQLWithArgs = macro  Macros.parseSQL
   }
+
+  //
+
+  implicit def enhanceConnection(conn: Connection) = new RichConnection(conn)
+
+  implicit def enhanceDataSource(datasource: DataSource)  = new RichDataSource(datasource)
+
+  implicit def enhancePlainSql(stmt: String) = SQLWithArgs(stmt, Seq.empty)
+
+
 
   sealed case class JdbcValue[T: JdbcValueAccessor](value: T) {
     def accessor: JdbcValueAccessor[T] = implicitly[JdbcValueAccessor[T]]
@@ -287,21 +310,51 @@ package object sql {
       if(rs.getObject(index)==null) None else Some(implicitly[JdbcValueAccessor[T]].passOut(rs, index))
   }
 
-  implicit class SQLStringContext(sc: StringContext) {
-    def sql(args: JdbcValue[_]*) = SQLWithArgs(sc.parts.mkString("?"), args)
+  /**
+    * the base class used in automate generated ResultSetMapper.
+    */
+  abstract class CaseClassResultSetMapper[T] extends ResultSetMapper[T] {
 
-    // SQL"" will validate the sql statement at compiler time
-    def SQL(args: JdbcValue[_]*): SQLWithArgs = macro  Macros.parseSQL
+    // cammel case mapping support such as userId -> user_id, postURL -> post_url
+    case class Field[T: JdbcValueAccessor](name: String, default: Option[T] = None) {
+      // val method: Option[java.lang.reflect.Method] = defaultName.map ( companion.getClass.getMethod(_) )
+      val underscoreName: Option[String] = {
+        val sb = new StringBuilder
+        var i = 0
+        var lastChar: Char = 0
+        while(i < name.length) {
+          val ch = name.charAt(i)
+          if(i == 0) sb.append(ch)
+          else {
+            if(Character.isLowerCase(lastChar) && Character.isUpperCase(ch)) {
+              sb.append('_')
+              sb.append(ch)
+            }
+            else sb.append(ch)
+          }
+          lastChar = ch
+          i += 1
+        }
+        val newName = sb.toString
+        if(newName != name) Some(newName)
+        else None
+      }
 
-  }
-
-  case class SQLWithArgs(sql: String, args: Seq[JdbcValue[_]]) {
-
-    def +(other: SQLWithArgs): SQLWithArgs =
-      SQLWithArgs(sql + other.sql, args ++ other.args)
-
-    def +(other: String): SQLWithArgs = SQLWithArgs(sql + other, args)
-
+      def apply(rs: ResultSetEx): T = {
+        if ( rs hasColumn name ){
+          rs.get[T](name)
+        }
+        else if(underscoreName.nonEmpty && rs.hasColumn(underscoreName.get)) {
+          rs.get[T](underscoreName.get)
+        }
+        else {
+          default match {
+            case Some(m) => m
+            case None => throw new RuntimeException(s"The ResultSet have no field $name but it is required")
+          }
+        }
+      }
+    }
   }
 
 }

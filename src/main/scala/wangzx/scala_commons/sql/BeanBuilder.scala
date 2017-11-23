@@ -28,7 +28,6 @@ object BeanBuilder {
     */
   def build[T](sources: Any*)(adds: (String, Any)*) : T = macro buildImpl[T]
 
-  // https://stackoverflow.com/questions/32603946/scala-macro-infer-implicit-value-using-c-prefix
   def convertType(c: scala.reflect.macros.blackbox.Context)(name: String, f: c.Tree, F: c.Type, T: c.Type): c.Tree = {
     import c.universe._
 
@@ -151,39 +150,45 @@ object BeanBuilder {
 
     val t = implicitly[c.WeakTypeTag[T]]
 
-    // dest fields
-    val targetFields: List[TermSymbol] = t.tpe.typeSymbol.asClass.primaryConstructor.asMethod.paramLists.apply(0).map(_.asTerm)
-
-    // (c.Tree, caseAccessor)
-    val sourceFields2: List[(c.Tree, MethodSymbol)] = sources.toList.flatMap { src: c.Tree =>
-      src.tpe.members.filter(m => m.isMethod && m.asMethod.isCaseAccessor).map ( m => (src, m.asMethod) )
+    if(t.tpe.typeSymbol.asClass.isCaseClass == false) {
+      c.error(c.enclosingPosition, "only support build Case Class, but [$t] is not ")
+      EmptyTree
     }
+    else {
+      // dest fields
+      val targetFields: List[TermSymbol] = t.tpe.typeSymbol.asClass.primaryConstructor.asMethod.paramLists.apply(0).map(_.asTerm)
 
-    val additionByName: Map[String, c.Tree] = adds.toList.map { add=>
-      val method = TermName("->")
-      //println(s"add = ${u.showRaw(add)}")
-      val (a: c.Tree,b: c.Tree) = add match {
-        case q"($a, $b)" => (a, b)
-        case q"scala.Predef.ArrowAssoc[..$x]($a).->[..$y]($b)" => (a, b)
-        case q"scala.this.Predef.ArrowAssoc[..$x]($a).->[..$y]($b)" => (a, b)
-        case _ =>
-          println(s"can't match ${u.showRaw(add)}")
-          throw new AssertionError()
+      // (c.Tree, caseAccessor)
+      val sourceFields2: List[(c.Tree, MethodSymbol)] = sources.toList.flatMap { src: c.Tree =>
+        src.tpe.members.filter(m => m.isMethod && m.asMethod.isCaseAccessor).map(m => (src, m.asMethod))
       }
-      val Literal(Constant(str: String)) = a
-      (str, b)
-    }.toMap
 
-    val parameters: List[c.Tree] = targetFields.flatMap { field: TermSymbol =>
+      val additionByName: Map[String, c.Tree] = adds.toList.map { add =>
+        val method = TermName("->")
+        //println(s"add = ${u.showRaw(add)}")
+        val (a: c.Tree, b: c.Tree) = add match {
+          case q"($a, $b)" => (a, b)
+          case q"scala.Predef.ArrowAssoc[..$x]($a).->[..$y]($b)" => (a, b)
+          case q"scala.this.Predef.ArrowAssoc[..$x]($a).->[..$y]($b)" => (a, b)
+          case _ =>
+            println(s"can't match ${u.showRaw(add)}")
+            throw new AssertionError()
+        }
+        val Literal(Constant(str: String)) = a
+        (str, b)
+      }.toMap
+
+      val parameters: List[c.Tree] = targetFields.flatMap { field: TermSymbol =>
         val fieldType = field.typeSignature
         val fieldName = field.name.toString
         val termName = TermName(fieldName)
 
         // first check additional
-        if(additionByName contains fieldName) {
+        if (additionByName contains fieldName) {
           val add = additionByName(fieldName)
-          val convert = convertType(c)(fieldName, add, add.tpe, fieldType)
-          Some(q"""$termName = $convert""")
+          Some(q"$termName = $add")  // 2017-11-22 additional part should not convert based on it's infer type.
+          // val convert = convertType(c)(fieldName, add, add.tpe, fieldType)
+          // Some(q"""$termName = $convert""")
         }
         else { // then check source fields
           val matchedFields: List[(c.Tree, MethodSymbol)] = sourceFields2.filter(tree_method => tree_method._2.name.toString == fieldName)
@@ -202,7 +207,8 @@ object BeanBuilder {
         }
       }
 
-    q"""new $t( ..$parameters )"""
+      q"""new $t( ..$parameters )"""
+    }
   }
 
 }

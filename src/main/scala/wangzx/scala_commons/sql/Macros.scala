@@ -100,7 +100,7 @@ object Macros {
     //println(s"x type = ${x.getClass}")
     // literals.children.foreach(println)
 
-    assert( x.forall( arg => arg.isInstanceOf[Literal] ) )
+//    assert( x.forall( arg => arg.isInstanceOf[Literal] ) )
     //val args2: c.Tree =
 
     val stmt = x.map { case Literal(Constant(value: String)) => value }.mkString("?")
