@@ -79,6 +79,14 @@ package sql {
     implicit def material[T]: ResultSetMapper[T] = macro Macros.generateCaseClassResultSetMapper[T]
   }
 
+  sealed case class JdbcValue[T: JdbcValueAccessor](value: T) {
+    def accessor: JdbcValueAccessor[T] = implicitly[JdbcValueAccessor[T]]
+    def passIn(stmt: PreparedStatement, index: Int) = accessor.passIn(stmt, index, value)
+  }
+  object JdbcValue {
+    implicit def wrap[T: JdbcValueAccessor](t: T): JdbcValue[T] = JdbcValue(t)
+    implicit def wrap[T: JdbcValueAccessor](t: Option[T]): JdbcValue[Option[T]] = JdbcValue(t)(new JdbcValueAccessor_Option[T])
+  }
 }
 
 package object sql {
@@ -101,15 +109,6 @@ package object sql {
   implicit def enhancePlainSql(stmt: String) = SQLWithArgs(stmt, Seq.empty)
 
 
-
-  sealed case class JdbcValue[T: JdbcValueAccessor](value: T) {
-    def accessor: JdbcValueAccessor[T] = implicitly[JdbcValueAccessor[T]]
-    def passIn(stmt: PreparedStatement, index: Int) = accessor.passIn(stmt, index, value)
-  }
-  object JdbcValue {
-    implicit def wrap[T: JdbcValueAccessor](t: T): JdbcValue[T] = JdbcValue(t)
-    implicit def wrap[T: JdbcValueAccessor](t: Option[T]): JdbcValue[Option[T]] = JdbcValue(t)(new JdbcValueAccessor_Option[T])
-  }
 
   // native JdbcValueAccessors
   implicit object JdbcValueAccessor_Boolean extends JdbcValueAccessor[Boolean] {
