@@ -81,9 +81,9 @@ object EnumTest {
 
     // val status2 = orderStatus.copyTo[TOrderStatus]
     val order: Order = null
-    val torder:TOrder = BeanBuilder.build[TOrder](order)() // require Int=>TOrderStatus
+//    val torder:TOrder = BeanBuilder.build[TOrder](order)() // require Int=>TOrderStatus
 
-    val order2 = BeanBuilder.build[Order](torder)()
+//    val order2 = BeanBuilder.build[Order](torder)()
   }
 
 }

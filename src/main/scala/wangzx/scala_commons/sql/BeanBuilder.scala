@@ -1,5 +1,7 @@
 package wangzx.scala_commons.sql
 
+import java.util.concurrent.atomic.AtomicInteger
+
 import scala.collection.immutable
 import scala.language.experimental.macros
 
@@ -28,11 +30,11 @@ object BeanBuilder {
     */
   def build[T](sources: Any*)(adds: (String, Any)*) : T = macro buildImpl[T]
 
-  def convertType(c: scala.reflect.macros.blackbox.Context)(name: String, f: c.Tree, F: c.Type, T: c.Type): c.Tree = {
+  def convertType(c: scala.reflect.macros.whitebox.Context)(name: String, f: c.Tree, alias: c.Tree, F: c.Type, T: c.Type): c.Tree = {
     import c.universe._
 
     def directConvert(): Option[c.Tree] = {
-      if( F <:< T) Some(f)
+      if( F <:< T) Some(alias) //Some(f)
       else None
     }
 
@@ -43,7 +45,7 @@ object BeanBuilder {
       )
       result match {
         case EmptyTree => None
-        case _ => Some(result)
+        case _ => Some(q"_root_.scala.Predef.implicitly[$F => $T].apply($alias)") // Some(result)
       }
     }
 
@@ -61,7 +63,7 @@ object BeanBuilder {
             )
           mapTo match {
             case EmptyTree => None
-            case _ => Some(mapTo)
+            case _ => Some(q"$alias.map(_root_.scala.Predef.implicitly[$fromElementType => $toElementType])") //Some(mapTo)
           }
         case _ =>
           None
@@ -76,32 +78,33 @@ object BeanBuilder {
       )
       copyTo match {
         case EmptyTree => None
-        case _ => Some(copyTo)
+        case _ => Some(q"($alias.copyTo[$T]:$T)")// Some(copyTo)
       }
     }
 
-//    // T.apply(f)
-//    def simpleApply(): Option[c.Tree] = {
-//      if(T.typeSymbol.companion != null) {
-//        val companion = T.typeSymbol.companion
-//        c.typecheck(q"""$companion.apply($f): $T""", silent = true) match {
-//          case EmptyTree => None
-//          case x@_ => Some(x)
-//        }
-//      }
-//      else None
-//    }
-//
-//    def simpleUnapply(): Option[c.Tree] ={
-//      if(F.typeSymbol.companion != null) {
-//        val companion = F.typeSymbol.companion
-//        c.typecheck(q"""$companion.unapply($f).get:$T""", silent = true) match {
-//          case EmptyTree => None
-//          case x@_ => Some(x)
-//        }
-//      }
-//      else None
-//    }
+    // T.apply(f)
+    def simpleApply(): Option[c.Tree] = {
+      if(T.typeSymbol.companion != null) {
+        val companion = T.typeSymbol.companion
+        c.typecheck(q"""$companion.apply($f): $T""", silent = true) match {
+          case EmptyTree => None
+          case x@_ => Some(q"$companion.apply($alias):$T")// Some(x)
+        }
+      }
+      else None
+    }
+
+    // F.unapply(f).get
+    def simpleUnapply(): Option[c.Tree] ={
+      if(F.typeSymbol.companion != null) {
+        val companion = F.typeSymbol.companion
+        c.typecheck(q"""$companion.unapply($f).get:$T""", silent = true) match {
+          case EmptyTree => None
+          case x@_ => Some(q"$companion.unapply($alias): $T")// Some(x)
+        }
+      }
+      else None
+    }
 //
 //    // T.apply( F.unapply(f) )
 //    def applyUnapply(): Option[c.Tree] = {
@@ -122,7 +125,7 @@ object BeanBuilder {
     def tryBuild(): Option[c.Tree] = {
       c.typecheck(q"""import ${c.prefix}._; build[$T]($f)() """, silent = true) match {
         case EmptyTree => None
-        case x@_ => Some(x)
+        case x@_ => Some(q"import ${c.prefix}._; build[$T]($alias)() ")// Some(x)
       }
     }
 
@@ -136,14 +139,14 @@ object BeanBuilder {
       .orElse(implicitConvert)
       .orElse(boxMap)
       .orElse(implicitCopyTo)
-//      .orElse(simpleApply)
-//      .orElse(simpleUnapply)
+      .orElse(simpleApply)
+      .orElse(simpleUnapply)
 //      .orElse(applyUnapply)
       .orElse(tryBuild)
       .getOrElse(failed)
   }
 
-  def buildImpl[T: c.WeakTypeTag](c: scala.reflect.macros.blackbox.Context)(sources: c.Tree*)(adds: c.Tree*): c.Tree = {
+  def buildImpl[T: c.WeakTypeTag](c: scala.reflect.macros.whitebox.Context)(sources: c.Tree*)(adds: c.Tree*): c.Tree = {
 
     import c.{universe => u}
     import u._
@@ -158,47 +161,58 @@ object BeanBuilder {
       // dest fields
       val targetFields: List[TermSymbol] = t.tpe.typeSymbol.asClass.primaryConstructor.asMethod.paramLists.apply(0).map(_.asTerm)
 
-      // (c.Tree, caseAccessor)
-      val sourceFields2: List[(c.Tree, MethodSymbol)] = sources.toList.flatMap { src: c.Tree =>
-        src.tpe.members.filter(m => m.isMethod && m.asMethod.isCaseAccessor).map(m => (src, m.asMethod))
+      // using alias for each source because it maybe a evaluation expr, avoid dupicate eval
+      // (c.Tree, alias, field-caseAccessor) foreach sources.field
+
+      val idx = new AtomicInteger(0)
+      val sourceFields2: List[(c.Tree, TermName, MethodSymbol)] = sources.toList.flatMap { src: c.Tree =>
+        val alias = TermName( s"x${idx.incrementAndGet}")  // x1, x2
+        src.tpe.members.filter(m => m.isMethod && m.asMethod.isCaseAccessor).map(m => (src, alias, m.asMethod))
       }
 
       val additionByName: Map[String, c.Tree] = adds.toList.map { add =>
-        val method = TermName("->")
+        //val method = TermName("->")
         //println(s"add = ${u.showRaw(add)}")
         val (a: c.Tree, b: c.Tree) = add match {
           case q"($a, $b)" => (a, b)
           case q"scala.Predef.ArrowAssoc[..$x]($a).->[..$y]($b)" => (a, b)
           case q"scala.this.Predef.ArrowAssoc[..$x]($a).->[..$y]($b)" => (a, b)
           case _ =>
-            println(s"can't match ${u.showRaw(add)}")
+            println(s"can't match ${u.showRaw(add)}\nusing fieldNameStr -> fieldValue style")
             throw new AssertionError()
         }
         val Literal(Constant(str: String)) = a
         (str, b)
       }.toMap
 
+      val aliases: List[(c.Tree, c.TermName)] = sourceFields2.map { case (tree, term, method) => (tree, term) }.toSet.toList
+
+      // generated val x1 = source1; val x2 = source2
+      val aliasTrees: List[c.Tree] = aliases.map { case (tree, term) => q"val $term  = $tree" }
+
       val parameters: List[c.Tree] = targetFields.flatMap { field: TermSymbol =>
         val fieldType = field.typeSignature
         val fieldName = field.name.toString
         val termName = TermName(fieldName)
 
-        // first check additional
+        // first check additional which must be direct matched
         if (additionByName contains fieldName) {
           val add = additionByName(fieldName)
           Some(q"$termName = $add")  // 2017-11-22 additional part should not convert based on it's infer type.
           // val convert = convertType(c)(fieldName, add, add.tpe, fieldType)
           // Some(q"""$termName = $convert""")
         }
-        else { // then check source fields
-          val matchedFields: List[(c.Tree, MethodSymbol)] = sourceFields2.filter(tree_method => tree_method._2.name.toString == fieldName)
+        else { // then check source fields, support convert
+          val matchedFields: List[(c.Tree, TermName, MethodSymbol)] = sourceFields2.filter(tree_method => tree_method._3.name.toString == fieldName)
 
           matchedFields match {
-            case (tree: c.Tree, accessor: MethodSymbol) :: Nil => // only 1
+            case (tree: c.Tree, alias: TermName, accessor: MethodSymbol) :: Nil => // only 1
               val srcType = accessor.returnType
-              val convert = convertType(c)(fieldName, q"""$tree.$termName""", srcType, fieldType)
+
+              // using tree for typecheck, but generate code on alias
+              val convert = convertType(c)(fieldName, q"""$tree.$termName""", q"$alias.$termName",srcType, fieldType)
               Some(q"""$termName = $convert""")
-            case Nil => // no source field matched
+            case Nil => // no source field matched, error checked via Case-Class's constructor
               None
             case header :: tailer =>
               val symbolNames = matchedFields.map(_._1.symbol.name.toString).mkString(",")
@@ -207,7 +221,9 @@ object BeanBuilder {
         }
       }
 
-      q"""new $t( ..$parameters )"""
+      val result = q"""{ ..$aliasTrees; new $t( ..$parameters ) }"""
+
+      result
     }
   }
 
