@@ -100,7 +100,7 @@ object BeanBuilder {
         val companion = F.typeSymbol.companion
         c.typecheck(q"""$companion.unapply($f).get:$T""", silent = true) match {
           case EmptyTree => None
-          case x@_ => Some(q"$companion.unapply($alias): $T")// Some(x)
+          case x@_ => Some(q"$companion.unapply($alias).get: $T")// Some(x)
         }
       }
       else None
@@ -222,6 +222,8 @@ object BeanBuilder {
       }
 
       val result = q"""{ ..$aliasTrees; new $t( ..$parameters ) }"""
+
+      println( "generate code:" + u.show(result) )
 
       result
     }
