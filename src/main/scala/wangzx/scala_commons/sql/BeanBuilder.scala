@@ -223,7 +223,7 @@ object BeanBuilder {
 
       val result = q"""{ ..$aliasTrees; new $t( ..$parameters ) }"""
 
-      println( "generate code:" + u.show(result) )
+//      println( "generate code:" + u.show(result) )
 
       result
     }

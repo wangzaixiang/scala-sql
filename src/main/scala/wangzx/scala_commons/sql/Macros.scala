@@ -40,6 +40,7 @@ object Macros {
     val constructor: c.universe.MethodSymbol = t.tpe.typeSymbol.asClass.primaryConstructor.asMethod
 
     var index = 0
+    // (q"address(rs)", q"""val address = Field[String]("address", defaultValue)""")
     val args: List[(c.Tree, c.Tree)] = constructor.paramLists(0).map { (p: c.universe.Symbol) =>
       val term: c.universe.TermSymbol = p.asTerm
       index += 1
