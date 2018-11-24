@@ -1,0 +1,74 @@
+# scala-sql Batch 支持方案
+
+> 本文介绍了一个基于宏替换的方式，为scala-sql提供更为优美的批处理支持能力的方法。
+> 
+> 本特性将在实验一段时间后，合并到 scala-sql 的正式版本之中，当然，如果没有达到预期
+> 也可能会废弃掉。
+
+scala-sql 一直缺乏一个对 batch 操作的直接支持，因此，在编写代码时，仍然需要采用 JDBC 的底层API，涉及到
+批处理时，代码的可读性不是很好。
+
+这个问题为什么难以解决呢？这与scala-sql的设计哲学时相关的：
+
+1. `sql"insert into table values (${a}, ${b})" ` 插值计算是将 sql 语句 与 传入变量强行绑定的。
+2. 而 Batch 操作时， sql 语句需要在多次绑定值时重用。
+
+当然，我们可以简单的在每次 addBatch 时，进行这个绑定，然后在运行期后续操作复用 sql 语句。但这种方式
+我感觉并不是很"自然"， 于是设计了如下的方式：
+
+```scala
+  case class User(name:String, age:Int, email: String)
+
+  def main(args: Array[String]): Unit = {
+
+    val conn = SampleDB.conn
+
+    val batch = conn.createBatch[User] { u =>
+      val name = u.name.toUpperCase()
+      sql"insert into users set name = ${name}, age = ${u.age}, email = ${u.email}"
+    }
+
+    val users = User("u1", 10, "u1") :: User("u2", 20, "u2") :: Nil
+
+    users.foreach { u =>
+      batch.addBatch(u)
+    }
+
+    batch.close()
+
+    // print the rows for test
+    conn.rows[User]("select * from users").foreach(println)
+
+  }
+
+```
+
+在如上示例中，
+1. `createBatch[T]( process: T=>SQLWithArgs )`会返回一个 Batch 对象，
+2. 在后续每次批量插入时， 调用 `batch.addBatch(user)`
+3. 使用 `batch.close` 提交并关闭批处理。
+
+有两种实现方式：
+1. 方式一：
+  1.在首次 addBatch 时，根据函数返回的 字符串插值， 准备 PreparedStatement。
+  2. 在每次 addBatch 时，执行 setParameter(idx, value) 操作，并调用 praparedStatement.addBatch
+2. 方式二：
+  1. 在 createBatch 时准备好 PreparedStatement （此时无法调用 process 函数）
+  2. 每次 addBatch 时，调用 process 函数，计算出绑定的值，`setParameter + addBatch`
+  
+方式一可以接受，但不自然，而且，每次 addBatch 操作都需要计算一个不必要的 SQLWithArgs 插值，是一个多余操作。
+方式二直觉上看，是无法实现的。不过，由于有万能的"macro"，我们可以自动的重写上述代码为：
+
+```scala
+
+val batch = new BatchImpl[User](conn, "insert into users set name = ?, age = ?, email = ?") { u =>
+  val name = u.name.toUpperCase()
+  List(name, u.age, u.email) 
+}
+
+```
+
+通过宏替换，我们可以使用更为直观的方式来编写代码，而系统会按照规则替换为优化执行的版本，避免不必要
+的运行期开销。
+
+
