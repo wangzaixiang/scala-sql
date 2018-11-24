@@ -49,14 +49,19 @@ scala-sql 一直缺乏一个对 batch 操作的直接支持，因此，在编写
 3. 使用 `batch.close` 提交并关闭批处理。
 
 有两种实现方式：
+
 1. 方式一：
-  1.在首次 addBatch 时，根据函数返回的 字符串插值， 准备 PreparedStatement。
-  2. 在每次 addBatch 时，执行 setParameter(idx, value) 操作，并调用 praparedStatement.addBatch
+
+    - 在首次 addBatch 时，根据函数返回的 字符串插值， 准备 PreparedStatement。
+    - 在每次 addBatch 时，执行 setParameter(idx, value) 操作，并调用 praparedStatement.addBatch
+
 2. 方式二：
-  1. 在 createBatch 时准备好 PreparedStatement （此时无法调用 process 函数）
-  2. 每次 addBatch 时，调用 process 函数，计算出绑定的值，`setParameter + addBatch`
+
+    - 在 createBatch 时准备好 PreparedStatement （此时无法调用 process 函数）
+    - 每次 addBatch 时，调用 process 函数，计算出绑定的值，`setParameter + addBatch`
   
 方式一可以接受，但不自然，而且，每次 addBatch 操作都需要计算一个不必要的 SQLWithArgs 插值，是一个多余操作。
+
 方式二直觉上看，是无法实现的。不过，由于有万能的"macro"，我们可以自动的重写上述代码为：
 
 ```scala
