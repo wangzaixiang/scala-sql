@@ -10,11 +10,6 @@ object BatchTest1 {
 
     val conn = SampleDB.conn
 
-    val batch = Batch.createBatch[User](conn){ u: User =>
-      val name = u.name.toUpperCase
-      sql"insert into users set name = $name, age = ${u.age}, email = ${u.email}"
-    }
-
     val batch2 = conn.createBatch[User] { u =>
       val name = u.name.toUpperCase()
       sql"insert into users set name = ${name}, age = ${u.age}, email = ${u.email}"
@@ -30,9 +25,6 @@ object BatchTest1 {
 
     conn.rows[User]("select * from users").foreach(println)
 
-
   }
-
-  // insert into users set name = ?, age = ?, email = ?
 
 }
