@@ -2,7 +2,7 @@ package wangzx.scala_commons.sql
 
 import java.sql._
 
-
+import scala.language.experimental.macros
 import scala.collection.mutable.ListBuffer
 
 object RichConnection {
@@ -47,6 +47,8 @@ class RichConnection(val conn: Connection) {
         throw ex
     }
   }
+
+  def createBatch[T](proc: T=>SQLWithArgs): Batch[T] = macro BatchMacro.createConnectionBatchImpl[T]
 
   def executeUpdate(stmt: SQLWithArgs): Int = executeUpdateWithGenerateKey(stmt)(null)
 
