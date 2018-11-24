@@ -121,9 +121,7 @@ TODO we will support normal JavaBeans and ScalaBeans(not getter/setter, but `var
 sbt usage:
 =====
 ```sbt
-libraryDependencies +=  "com.github.wangzaixiang" %% "scala-sql" % "2.0.0-SNAPSHOT"
-scalaVersion := "2.11.6"
-
+libraryDependencies +=  "com.github.wangzaixiang" %% "scala-sql" % "2.0.6"
 ```
 
 
