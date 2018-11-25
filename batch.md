@@ -25,9 +25,9 @@ scala-sql 一直缺乏一个对 batch 操作的直接支持，因此，在编写
 
     val batch = conn.createBatch[User] { u =>
       val name = u.name.toUpperCase()
-      sql"insert into users set name = ${name}, age = ${u.age}, email = ${u.email}"
+      sql"insert into users(name, age, email) values(${name}, ${u.age}, ${u.email})"
     }
-
+    
     val users = User("u1", 10, "u1") :: User("u2", 20, "u2") :: Nil
 
     users.foreach { u =>
@@ -75,5 +75,21 @@ val batch = new BatchImpl[User](conn, "insert into users set name = ?, age = ?, 
 
 通过宏替换，我们可以使用更为直观的方式来编写代码，而系统会按照规则替换为优化执行的版本，避免不必要
 的运行期开销。
+
+# MySQL 增强
+对MySQL而言，要使用 batch 处理，你必须在 URL 中加上如下选项：rewriteBatchStatements=true。
+此外，MySQL仅支持对 insert into table(field1,field2,..) values(a,b,..)的语句进行批处理。如果一条insert语句中存在较多的字段时，
+这种语法比较难以阅读和维护，我们在开发中推荐使用 insert into table set field1 = a, field2 = b,... 的语法。但后者MySQL JDBC是
+不支持批处理的。
+
+为此，scala-sql提供了一个方法，createMySQLBatch，使用如下：
+```scala
+    val batch = conn.createMySqlBatch[User] { u =>
+      val name = u.name.toUpperCase()
+      sql"insert into users set name = ${name}, age = ${u.age}, email = ${u.email}"
+    }
+```
+在这里，createMySqlBatch 会在编译期间，识别 insert set 语法，并自动的转换成为 insert values 语法，从而实现既代码可杜，同时，又支持批处理能力。这也是 Macro 带来的额外便利吧。
+
 
 
