@@ -23,6 +23,8 @@ scala-sql 一直缺乏一个对 batch 操作的直接支持，因此，在编写
 
     val conn = SampleDB.conn
 
+    // 代码块接收 User 作为参数，返回一个字符串插值。
+    // 目前，仅支持在代码块的最后一个表达式是字符串插值。但前面代码可以自由，例如，进行必要的计算。
     val batch = conn.createBatch[User] { u =>
       val name = u.name.toUpperCase()
       sql"insert into users(name, age, email) values(${name}, ${u.age}, ${u.email})"
@@ -90,6 +92,9 @@ val batch = new BatchImpl[User](conn, "insert into users set name = ?, age = ?, 
     }
 ```
 在这里，createMySqlBatch 会在编译期间，识别 insert set 语法，并自动的转换成为 insert values 语法，从而实现既代码可读，同时，又支持批处理能力。这也是 Macro 带来的额外便利吧。
+
+更为复杂的写法也是支持的，譬如：`insert into users set name = 'abab', email = toupper(${u.email}`。
+
 
 ## 题外话
 集成了对SQL的编译时期检查，可能会给scala-sql带来其它有价值的特性，比如：
