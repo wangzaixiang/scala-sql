@@ -93,7 +93,7 @@ val batch = new BatchImpl[User](conn, "insert into users set name = ?, age = ?, 
 ```
 在这里，createMySqlBatch 会在编译期间，识别 insert set 语法，并自动的转换成为 insert values 语法，从而实现既代码可读，同时，又支持批处理能力。这也是 Macro 带来的额外便利吧。
 
-更为复杂的写法也是支持的，譬如：`insert into users set name = 'abab', email = toupper(${u.email}`。
+更为复杂的写法也是支持的，譬如：`insert into users set name = 'abab', email = toupper(${u.email})`。
 
 
 ## 题外话
