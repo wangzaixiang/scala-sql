@@ -16,10 +16,6 @@ trait Batch[T] {
 
 }
 
-object Batch {
-
-  def createBatch[T](conn: Connection)(proc: T=>SQLWithArgs): Batch[T] = macro BatchMacro.createBatchImpl[T]
-}
 
 case class BatchImpl[T](conn: Connection, statement: String ) ( proc: T => List[JdbcValue[_]] ) extends Batch[T] {
 

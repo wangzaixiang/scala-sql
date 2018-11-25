@@ -1,19 +1,53 @@
 package wangzx.scala_commons.sql
 
 import java.sql.Connection
+import java.util
+
+import net.sf.jsqlparser.expression.Expression
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList
+import net.sf.jsqlparser.parser.{CCJSqlParser, CCJSqlParserUtil}
+import net.sf.jsqlparser.schema.Column
+import net.sf.jsqlparser.statement.Statement
+import net.sf.jsqlparser.statement.insert.Insert
 
 import scala.reflect.macros.blackbox.Context
 import scala.language.experimental.macros
 import wangzx.scala_commons.sql._
 
+import scala.collection.JavaConverters._
+
+
 object BatchMacro {
 
   // def createBatch[T](conn: Connection)(proc: T=>SQLWithArgs): Batch[T] = macro createBatchImpl[T]
 
+  def rewriteMySQLInsert(stmt: String): String = {
+    val insert: Insert = CCJSqlParserUtil.parse(stmt).asInstanceOf[Insert]
+
+    assert(insert.getSelect == null, "not support insert .. select ... statement")
+
+    if(insert.isUseSet){ // rewrite as values(...)
+      // columns
+      // itemsList
+
+      val columns = insert.getSetColumns
+      val itemsList: util.List[Expression] = insert.getSetExpressionList
+
+      insert.setSetColumns(null)
+      insert.setSetExpressionList(null)
+      insert.setUseSet(false)
+
+      insert.setUseValues(true)
+      insert.setColumns(columns)
+      insert.setItemsList(new ExpressionList(itemsList))
+    }
+
+    insert.toString
+  }
 
   // convert a "insert into table set field1 = ?, field2 = ?"  as "insert into table(field1, fields) values(?,?)"
 
-  def createBatchImpl[T: c.WeakTypeTag](c: Context)(conn: c.Tree)(proc: c.Tree) : c.Tree = {
+  private def createBatchImpl0[T: c.WeakTypeTag](c: Context)(conn: c.Tree, proc: c.Tree, convertMysql: Boolean) : c.Tree = {
     import c.universe._
 
     val t: c.WeakTypeTag[T] = implicitly[c.WeakTypeTag[T]]
@@ -65,16 +99,26 @@ object BatchMacro {
       c.error(c.enclosingPosition, "no sql interpolation defined in block")
     }
 
-    val result = q"""BatchImpl.apply($conn, ${transformer.statement})($changed) """
+    val statement =
+      if(convertMysql) rewriteMySQLInsert(transformer.statement)
+      else transformer.statement
+
+    val result = q"""BatchImpl.apply($conn, ${statement})($changed) """
 
     result
 
   }
 
-  def createConnectionBatchImpl[T: c.WeakTypeTag](c: Context)(proc: c.Tree): c.Tree = {
+  def createBatchImpl[T: c.WeakTypeTag](c: Context)(proc: c.Tree): c.Tree = {
     import c.universe._
     val x = c.prefix.tree  // RichConnection
-    createBatchImpl(c)(q"$x.conn")(proc)
+    createBatchImpl0(c)(q"$x.conn", proc, false)
+  }
+
+  def createMySqlBatchImpl[T: c.WeakTypeTag](c: Context)(proc: c.Tree): c.Tree = {
+    import c.universe._
+    val x = c.prefix.tree
+    createBatchImpl0(c)(q"$x.conn", proc, true)
   }
 
 }

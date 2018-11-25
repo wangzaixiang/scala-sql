@@ -10,7 +10,7 @@ object BatchTest1 {
 
     val conn = SampleDB.conn
 
-    val batch2 = conn.createBatch[User] { u =>
+    val batch2 = conn.createMysqlBatch[User] { u =>
       val name = u.name.toUpperCase()
       sql"insert into users set name = ${name}, age = ${u.age}, email = ${u.email}"
     }

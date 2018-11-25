@@ -48,7 +48,12 @@ class RichConnection(val conn: Connection) {
     }
   }
 
-  def createBatch[T](proc: T=>SQLWithArgs): Batch[T] = macro BatchMacro.createConnectionBatchImpl[T]
+  def createBatch[T](proc: T=>SQLWithArgs): Batch[T] = macro BatchMacro.createBatchImpl[T]
+
+  /**
+    * translate the "insert into table set a = ?, b = ?" into "insert into table(a,b) values(?,?)
+    */
+  def createMysqlBatch[T](proc: T=>SQLWithArgs): Batch[T] = macro BatchMacro.createMySqlBatchImpl[T]
 
   def executeUpdate(stmt: SQLWithArgs): Int = executeUpdateWithGenerateKey(stmt)(null)
 
