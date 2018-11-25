@@ -89,7 +89,9 @@ val batch = new BatchImpl[User](conn, "insert into users set name = ?, age = ?, 
       sql"insert into users set name = ${name}, age = ${u.age}, email = ${u.email}"
     }
 ```
-在这里，createMySqlBatch 会在编译期间，识别 insert set 语法，并自动的转换成为 insert values 语法，从而实现既代码可杜，同时，又支持批处理能力。这也是 Macro 带来的额外便利吧。
+在这里，createMySqlBatch 会在编译期间，识别 insert set 语法，并自动的转换成为 insert values 语法，从而实现既代码可读，同时，又支持批处理能力。这也是 Macro 带来的额外便利吧。
 
-
+## 题外话
+集成了对SQL的编译时期检查，可能会给scala-sql带来其它有价值的特性，比如：
+- [ ] 对 `delete from table`这样的未加where的语句进行编译期报错。
 
