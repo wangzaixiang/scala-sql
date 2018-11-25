@@ -1,19 +1,19 @@
 utility scala-sql
 =================
 
-scala-sql 2.0 is a rewrite of the previous 1.0, It is not fully compatiable with the old API 
-but it is 
+scala-sql 2.0 is the simple scala sql api on top of JDBC.
+- Little new concepts, just a light enclosing api on top of JDBC. Learning scala-sql is 1-2 hours if you familar with JDBC.
+- scala friend api, designed for stronger typed, immutable and functional programming
+- extensible for new data types.
+- simple typed mapping, via macro.
+- compile time SQL grammer check.
+- deattached Row for common use without mapping.
 
 # Planning Features
 
-- [X] support customize types which can be mapped to SQL( means it can pass into SQL 
-like `select * from users where name = ${name}` and can be passed out from SQL like `row.get[T]("field)` )
-- [X] flexible mapping ResultSet to Bean via ResultSetMapper
-- [X] using macro to generate Case class ResultSetMapper.
-- [ ] using macro to generate JavaBean、ScalaBean ResultSetMapper
-- [X] using macro to parse the SQL grammar so can we validate SQL grammar in compile time. (this is a 
-long-term designed feature. ) 
 - [ ] utils to support REPL.  
+- [ ] Batch API
+- [ ] Client Side Sharding(Sharding-JDBC) support
 
 # Basic usgae
 scala-sql enhance `java.sql.Connection` & `java.sql.DataSource` with more methods:
@@ -121,9 +121,7 @@ TODO we will support normal JavaBeans and ScalaBeans(not getter/setter, but `var
 sbt usage:
 =====
 ```sbt
-libraryDependencies +=  "com.github.wangzaixiang" %% "scala-sql" % "2.0.0-SNAPSHOT"
-scalaVersion := "2.11.6"
-
+libraryDependencies +=  "com.github.wangzaixiang" %% "scala-sql" % "2.0.6"
 ```
 
 
