@@ -28,6 +28,9 @@ publishTo := {
     Some("releases"  at nexus + "service/local/staging/deploy/maven2")
 }
 
+publishConfiguration  := publishConfiguration.value.withOverwrite(true)
+
+
 publishArtifact in Test := false
 
 pomIncludeRepository := { _ => false }
