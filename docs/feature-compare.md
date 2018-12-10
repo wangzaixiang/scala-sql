@@ -4,7 +4,7 @@
 
 | Feature | Slick | Dobbie | Quill | ScalikeJDBC | scala-sql |
 ------- | ----- | ------ | ----- | ----------- | --------- |
-|Model representation| Case classes/tuples, or hand-mapped types | Case classes, primitives, tuples, HLists, Shapeless records | Case classes | None OR case classes w/ macros add-on | Case classes |
+|Model representation| Case classes/tuples, or hand-mapped types | Case classes, primitives, tuples, HLists, Shapeless records | Case classes | None OR case classes w/ macros add-on | Case classes, extensible Primitives |
 |Meta-model| Lifted | None | By converntion | None OR by convention when using macros add-on | None
 |Query language| Embedded DSL | SQL | Quoted DSL | SQL / embedded DSL | SQL |
 |Type-safe queries| Yes | No | Yes | Partial | Yes |
