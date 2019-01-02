@@ -2,7 +2,7 @@ organization := "com.github.wangzaixiang"
 
 name := "scala-sql"
 
-version := "2.0.7-SNAPSHOT"
+version := "2.0.8-SNAPSHOT"
 
 scalaVersion := "2.12.4"
 
