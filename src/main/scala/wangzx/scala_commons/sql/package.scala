@@ -333,7 +333,7 @@ package object sql {
           else {
             if(Character.isLowerCase(lastChar) && Character.isUpperCase(ch)) {
               sb.append('_')
-              sb.append(ch)
+              sb.append(ch.toLower)
             }
             else sb.append(ch)
           }
