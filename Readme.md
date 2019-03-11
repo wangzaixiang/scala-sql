@@ -69,28 +69,46 @@ scala-sql enhance `java.sql.Connection` & `java.sql.DataSource` with more method
   ```scala
     case class User(name: String, age: Int)
   
-    val users: List[User] = dataSource.rows[User](s"select * from users where name like ${name}")
+    val users: List[User] = dataSource.rows[User](sql"select * from users where name like ${name}")
   ```
   scala-sql provide a Simple ORM mechanism, any object of type `T` which has a implict `ResultSetMapper[T]`
   can be used in rows, row, foreach method.
   
-  Currently, the scala-sql provide a macro which support automated generate the `ResultSetMapper` of a 
+  `rows[T](sql)` where T can be 
+  - Case Class. Currently, the scala-sql provide a macro which support automated generate the `ResultSetMapper` of a 
   case class, so you need not writing the mapping code by hand, the macro will automate generate it.
-  
-  `Row` exists when you don't provide a mapping type, you can think `Row` is a deattached `ResultSet` row.
+  - `Row` exists when you don't provide a mapping type, you can think `Row` is a deattached `ResultSet` row.
   so a simple `rows[Row](sql"statement")` can used to recieve data from database.
+  - primitive types. if your statment only select 1 column such as `select count(*) from table`, you can even using the 
+  primitive sql types such as `rows[Int](sql"statement"")`, this include
+    - Byte, Short, Int, Long, java.math.BigDecimal, scala.BigDecimal
+    - String
+    - java.sql.Date, java.sql.Time, java.sql.DateTime, java.sql.Timestamp
   
-  - if your statment only select 1 column such as `select count(*) from table`, you can even using the 
-  primitive sql types such as `rows[Int](sql"statement"")` 
-  
-  *I will enhance the macro to support normal Java Beans, Scala Beans later.*
 - foreach
+  ```scala
+  dataSource.foreach(sql"select * from users where name like ${name}" { u: User =>
+    ...
+  }
+  ```
+  also, you can use `Case Class` or `Row` or `primitive sql types` for recieve the mapping. 
 - generateKey
 - withStatement
+  ```scala
+  dataSource.withStatement { stmt: Statement => ...
+  }
+  ```
 - withPreparedStatement
 - withConnection
+  ```scala
+  dataSource.withConnection { conn: Connection => ...
+  }
+  ```
 - withTransaction
-
+  ```scala
+  dataSource.withTransaction { conn: Conntion => ...
+  }
+  ```
 
 # Compile-Time grammar check
 1. write a scala-sql.properties in current directory 
