@@ -15,7 +15,7 @@ scala-sql 2.0 是一个轻量级的 scala jdbc 库，它是一个简单的JDBC�
 scala-sql 为 `java.sql.Connection` & `java.sql.DataSource` 提供了如下增强的方法:
 - executeUpdate
   ```scala
-    dataSource executeUpdate sql"""update table set name = "$name" and age = ${age} where id = ${id}"""
+    dataSource executeUpdate sql"""update table set name = ${name} and age = ${age} where id = ${id}"""
   ```
   你可以理解上面的代码等同于如下的Java代码:
   ```java
