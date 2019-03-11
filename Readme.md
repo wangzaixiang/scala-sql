@@ -12,7 +12,7 @@ scala-sql 2.0 is the simple scala sql api on top of JDBC.
 # Planning Features
 
 - [ ] utils to support REPL.  
-- [ ] Batch API
+- [X] Batch API
 - [ ] Client Side Sharding(Sharding-JDBC) support
 
 # Basic usgae
@@ -121,7 +121,7 @@ define `some.url, some.user, some.password, some.driver`
 scala-sql defines type class `JdbcValueAccessor[T]`, any type which has an implicit context bound of `JdbcValueAccessor`
 can be passed into query, and passed out from ResultSet. 
 This include:
-- primary SQL types, such as `byte`, `short`, `int`, `string`, `date`, `time`, `timestamp`, `bigdecimal`
+- primary SQL types, such as `byte`, `short`, `int`, `string`, `date`, `time`, `timestamp`, `BigDecimal`
 - scala types: such as `scala.BigDecimal`
 - optional types. Now you can pass a `Option[BigDecimal]` into statement which will auto support the `null`
 - customize your type via define a implicit value `JdbcValueAccessor[T]`
@@ -133,13 +133,12 @@ can be mapped to a ResulSet, thus, can be used in the `rows[T]`, `row[T]`, `fore
 instead of writing the ResultSetMapper yourself, scala-sql provide a Macro which automate generate the
 mapper for Case Class. 
 
-TODO we will support normal JavaBeans and ScalaBeans(not getter/setter, but `var name` style) 
-
+So, does it support all `Case Class` ? of couse not, eg. you Case class `case class User(name: String, url: URL)` is not supported because the url field is not compatible with SQL. the scala-sql Macro provide a stronger type check mechanism for ensure the `Case Class` is able to mapping from ResultSet. 
 
 sbt usage:
 =====
 ```sbt
-libraryDependencies +=  "com.github.wangzaixiang" %% "scala-sql" % "2.0.6"
+libraryDependencies +=  "com.github.wangzaixiang" %% "scala-sql" % "2.0.7"
 ```
 
 
