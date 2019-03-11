@@ -1,6 +1,8 @@
 utility scala-sql
 =================
 
+[中文版本帮助](Readme-ZH_CN.md)
+
 scala-sql 2.0 is the simple scala sql api on top of JDBC.
 - Little new concepts, just a light enclosing api on top of JDBC. Learning scala-sql is 1-2 hours if you familar with JDBC.
 - scala friend api, designed for stronger typed, immutable and functional programming
