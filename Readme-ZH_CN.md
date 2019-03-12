@@ -68,9 +68,7 @@ scala-sql 为 `java.sql.Connection` & `java.sql.DataSource` 提供了如下增�
 
   `rows[T](sql)` 这里的 T 可以是： 
   - Case Class. 
-  case class, so you need not writing the mapping code by hand, the macro will automate generate it.
   - `Row` 可以理解为 Row 是一个离线的 ResultSet 行，它提供了和ResultSet一样的API，如 getInt(index) 、getString(name)等。
-  case class, so you need not writing the mapping code by hand, the macro will automate generate it.
   - 基础类型. 如果我们的SQL语句只查询单个字段，那么可以直接使用 `rows[Int](sql"statement"")` 这种形式。
   
 - foreach
