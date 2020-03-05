@@ -78,6 +78,37 @@ scala-sql 为 `java.sql.Connection` & `java.sql.DataSource` 提供了如下增�
   }
   ```
   与 rows 相似。foreach 在迭代中执行代码，而不是返回一个 List[T]。
+- [batch 处理](docs/batch.md)
+  scala-sql提供了一种友好的方式来处理batch insert/update.
+  ```scala
+  case class User(name:String, age:Int, email: String)
+
+  def main(args: Array[String]): Unit = {
+
+    val conn = SampleDB.conn
+
+    // 代码块接收 User 作为参数，返回一个字符串插值。目前，仅支持在代码块的最后一个表达式是字符串插值。但前面代码可以自由，例如，进行必要的计算。
+    // 返回的 batch 对象，后续可以使用 addBatch(user: User) 来处理单行的插入，并以成批的方式进行提交。
+    // 也可以设置 autoCommitCount（批次提交记录数） 或者手动 commit 提交一批数据。
+    val batch = conn.createBatch[User] { u =>
+      val name = u.name.toUpperCase()
+      sql"insert into users(name, age, email) values(${name}, ${u.age}, ${u.email})"
+    }
+    
+    val users = User("u1", 10, "u1") :: User("u2", 20, "u2") :: Nil
+
+    users.foreach { u =>
+      batch.addBatch(u)
+    }
+
+    batch.close()
+
+    // print the rows for test
+    conn.rows[User]("select * from users").foreach(println)
+
+  }
+  ```
+  scala-sql还提供 `conn.createMySQLBatch` 方式，支持mysql的特定语法：`insert into table set col1=?, col2 =?` 并在编译期，转化为`insert into table (col1, col2) values(?,?)`的形式，使其也具备批量提交的能力。
 - generateKey
 - withStatement
   ```scala
