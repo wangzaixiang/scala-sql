@@ -128,11 +128,29 @@ scala-sql 为 `java.sql.Connection` & `java.sql.DataSource` 提供了如下增�
   ```
 
 # 编译期语法检查
+scala-sql 可以在编译时对源代码中的sql"statement"进行语法检查，诸如SQL语法错误，或者错误的表名、字段名拼写错误等，可以自动检查出来
 1. 在当前目录下编辑 scala-sql.properties 文件。 
 2. 设置 default.url, default.user, default.password, default.driver 信息，使之指向一个用于进行类型检查的数据库。
 3. 使用 SQL"" 插值。
 4. 如果我们的项目中会访问多个数据库，我们可以在最外层的类上加上 `@db(name="some")` 注释, 在配置文件中定义：`some.url, some.user, some.password, some.driver` 
 
+# JdbcValue[T]， JdbcValueAccessor[T]
+scala-sql defines type class `JdbcValueAccessor[T]`, any type which has an implicit context bound of `JdbcValueAccessor`
+can be passed into query, and passed out from ResultSet. 
+This include:
+- primary SQL types, such as `byte`, `short`, `int`, `string`, `date`, `time`, `timestamp`, `BigDecimal`
+- scala types: such as `scala.BigDecimal`
+- optional types. Now you can pass a `Option[BigDecimal]` into statement which will auto support the `null`
+- customize your type via define a implicit value `JdbcValueAccessor[T]`
+
+# ResultSetMapper[T]
+scala-sql define type class `ResultSetMapper[T]`, any type which has an implicit context of `ResultSetMapper`
+can be mapped to a ResulSet, thus, can be used in the `rows[T]`, `row[T]`, `foreach[T]` operations.
+
+instead of writing the ResultSetMapper yourself, scala-sql provide a Macro which automate generate the
+mapper for Case Class. 
+
+So, does it support all `Case Class` ? of couse not, eg. you Case class `case class User(name: String, url: URL)` is not supported because the url field is not compatible with SQL. the scala-sql Macro provide a stronger type check mechanism for ensure the `Case Class` is able to mapping from ResultSet. 
 
 sbt 依赖:
 =====
