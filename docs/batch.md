@@ -79,7 +79,7 @@ val batch = new BatchImpl[User](conn, "insert into users set name = ?, age = ?, 
 的运行期开销。
 
 # MySQL 增强
-对MySQL而言，要使用 batch 处理，你必须在 URL 中加上如下选项：rewriteBatchStatements=true。
+对MySQL而言，要使用 batch 处理，你必须在 URL 中加上如下选项：rewriteBatchedStatements=true。
 此外，MySQL仅支持对 insert into table(field1,field2,..) values(a,b,..)的语句进行批处理。如果一条insert语句中存在较多的字段时，
 这种语法比较难以阅读和维护，我们在开发中推荐使用 insert into table set field1 = a, field2 = b,... 的语法。但后者MySQL JDBC是
 不支持批处理的。
@@ -91,7 +91,7 @@ val batch = new BatchImpl[User](conn, "insert into users set name = ?, age = ?, 
       sql"insert into users set name = ${name}, age = ${u.age}, email = ${u.email}"
     }
 ```
-在这里，createMySqlBatch 会在编译期间，识别 insert set 语法，并自动的转换成为 insert values 语法，从而实现既代码可读，同时，又支持批处理能力。这也是 Macro 带来的额外便利吧。
+在这里，createMySqlBatch 会在编译期间，识别 `insert into table set field1=value1` 语法，并自动的转换成为 `insert into table(field1) values(value1)` 语法，从而实现既代码可读，同时，又支持批处理能力。这也是 Macro 带来的额外便利吧。
 
 更为复杂的写法也是支持的，譬如：`insert into users set name = 'abab', email = toupper(${u.email})`。
 当然，记得设置 mysql jdbc 参数：rewriteBatchedStatements=true，否则，即使开启了 batch，也不会有实际的性能提升。
