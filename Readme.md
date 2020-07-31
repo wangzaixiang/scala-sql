@@ -111,6 +111,7 @@ scala-sql enhance `java.sql.Connection` & `java.sql.DataSource` with more method
   dataSource.withTransaction { conn: Conntion => ...
   }
   ```
+- [Batch API](docs/batch.md) provide a scala style API for batch operation, special support for MySQL Grammar
 
 # Compile-Time grammar check
 1. write a scala-sql.properties in current directory 
