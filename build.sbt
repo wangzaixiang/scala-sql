@@ -4,9 +4,9 @@ name := "scala-sql"
 
 version := "2.0.7"
 
-scalaVersion := "2.12.4"
+scalaVersion := "2.13.7"
 
-crossScalaVersions := Seq("2.11.11", "2.12.4")
+crossScalaVersions := Seq("2.11.12", "2.12.15")
 
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.9",
@@ -52,4 +52,11 @@ pomExtra := (
         <name>wangzaixiang</name>
         <url>http://wangzaixiang.github.io</url>
       </developer>
-    </developers>)
+    </developers>
+    <scm>
+      <connection>scm:git:https://github.com/wangzaixiang/scala-sql</connection>
+      <developerConnection>scm:git:https://github.com/wangzaixiang/scala-sql</developerConnection>
+      <url>github.com/wangzaixiang/scala-sql</url>
+      <tag>v2.0.7</tag>
+  </scm>
+)
