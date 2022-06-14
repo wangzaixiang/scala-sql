@@ -48,6 +48,10 @@ object BuilderTest {
     val person = Person("123", "wangzhx", List("123"), PersonAddress("gd", "gz"))
     val user = BeanBuilder.build[User](person)("score"->Some(100))
 
+    // new build method
+    val user2 = BeanBuilder.build[User](person)(_.copy(
+      score = Some(100), name="rainbow"))
+
     assert( user == User(123, "wangzhx", List(123), UserAddress("gd", "gz"), Some(100)))
   }
 

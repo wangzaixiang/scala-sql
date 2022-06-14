@@ -1,32 +1,20 @@
 package wangzx.scala_commons.sql
 
-import java.io.FileInputStream
-import java.sql.{Connection, Driver, ResultSet}
-
-import scala.util.Properties
-//import java.util.Properties
-import javax.sql.DataSource
-
-import scala.language.experimental.macros
-
+import scala.quoted.*
+import java.sql.Connection
 
 object Macros {
 
-  //def implictUserMapper: ResultSetMapper[User] = macro implictMapper[User]
-  /*
-  // Case class Style
-  implicit object UserMapper extends CaseClassResultSetMapper[User](User) {
+  def createBatchImpl[T: Type](proc: Expr[T=>SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
+    '{ null }
 
-    override def from(rs: ResultSet): User = {
-      val NAME = Field[String]("name")
-      val AGE = Field[Int]("age")
-      val CLASSROOM = Field[Int]("classRoom", Some("apply$default$3"))
+  def createMysqlBatchImpl[T: Type](proc: Expr[T=>SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
+    '{ null }
 
-      User(NAME(rs), AGE(rs), CLASSROOM(rs))
-    }
+  def buildImpl1[T:Type](sources: Expr[Seq[AnyRef]])(additions: Expr[Seq[(String, Any)]])(using Quotes): Expr[T] =
+    '{ null.asInstanceOf[T] }
 
+  def buildImpl2[T:Type](sources: Expr[Seq[AnyRef]])(additions: Expr[T=>T])(using Quotes): Expr[T] =
+    '{ null.asInstanceOf[T] }
 
-  }
-  }
-   */
 }

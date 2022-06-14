@@ -10,8 +10,10 @@ import scala.language.experimental.macros
   */
 object BeanBuilder {
 
-  def build[T](sources: AnyRef*)(additions: (String, Any)*): T = ???
+  inline def build[T](sources: AnyRef*)(additions: (String, Any)*): T =
+    ${ Macros.buildImpl1[T]('sources)('additions) }
 
-  def build[T](sources: AnyRef*)(additions: T=>T = identity): T = ???
+  inline def build[T](sources: AnyRef*)(additions: T=>T = identity): T =
+    ${ Macros.buildImpl2[T]('sources)('additions) }
 
 }

@@ -43,12 +43,14 @@ given ConnectionOps with
       }
 
 
-    def createBatch[T](proc: T => SQLWithArgs): Batch[T] = ???  // TODO port macro
+    inline def createBatch[T](proc: T => SQLWithArgs): Batch[T] =
+      ${ Macros.createBatchImpl[T]('proc, 'conn) }
 
     /**
       * translate the "insert into table set a = ?, b = ?" into "insert into table(a,b) values(?,?)
       */
-    def createMysqlBatch[T](proc: T => SQLWithArgs): Batch[T] = ??? // TODO port macro
+    inline def createMysqlBatch[T](proc: T => SQLWithArgs): Batch[T] =
+      ${ Macros.createMysqlBatchImpl[T]('proc, 'conn) }
 
     def executeUpdate(stmt: SQLWithArgs): Int = executeUpdateWithGenerateKey(stmt)(null)
 
@@ -313,9 +315,11 @@ given DataSourceOps with
 
     def withTransaction[T](f: Connection => T): T = withConnection(_.withTransaction(f))
 
-    def createBatch[T](proc: T=>SQLWithArgs): Batch[T] = withConnection(_.createBatch(proc))
+    inline def createBatch[T](proc: T=>SQLWithArgs): Batch[T] =
+      withConnection(conn => conn.createBatch(proc))
 
-    def createMysqlBatch[T](proc: T=>SQLWithArgs): Batch[T] = withConnection(_.createMysqlBatch(proc))
+    inline def createMysqlBatch[T](proc: T=>SQLWithArgs): Batch[T] =
+      withConnection(conn => conn.createMysqlBatch(proc))
 
     def executeUpdate(stmt: SQLWithArgs): Int =
       executeUpdateWithGenerateKey(stmt)(null)

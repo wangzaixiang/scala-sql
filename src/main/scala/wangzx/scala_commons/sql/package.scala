@@ -343,8 +343,8 @@ trait ConnectionOps:
   extension (conn: Connection)
     def withStatement[T](f: Statement => T): T
     def withTransaction[T](f: Connection=>T): T
-    def createBatch[T](proc: T=>SQLWithArgs): Batch[T]
-    def createMysqlBatch[T](proc: T=>SQLWithArgs): Batch[T]
+    inline def createBatch[T](proc: T=>SQLWithArgs): Batch[T]
+    inline def createMysqlBatch[T](proc: T=>SQLWithArgs): Batch[T]
     def executeUpdate(stmt: SQLWithArgs): Int
     def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(proc: ResultSet=>Unit = null): Int
     def generateKey[T: JdbcValueAccessor](stmt: SQLWithArgs): T
@@ -363,8 +363,8 @@ trait DataSourceOps:
   extension (dataSource: DataSource)
     def withStatement[T](f: Statement => T): T
     def withTransaction[T](f: Connection=>T): T
-    def createBatch[T](proc: T=>SQLWithArgs): Batch[T]
-    def createMysqlBatch[T](proc: T=>SQLWithArgs): Batch[T]
+    inline def createBatch[T](proc: T=>SQLWithArgs): Batch[T]
+    inline def createMysqlBatch[T](proc: T=>SQLWithArgs): Batch[T]
     def executeUpdate(stmt: SQLWithArgs): Int
     def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(processGenerateKeys: ResultSet=>Unit = null): Int
     def generateKey[T: JdbcValueAccessor](stmt: SQLWithArgs): T
