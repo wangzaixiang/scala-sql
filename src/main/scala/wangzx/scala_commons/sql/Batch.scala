@@ -17,14 +17,14 @@ trait Batch[T] {
 }
 
 
-case class BatchImpl[T](conn: Connection, statement: String ) ( proc: T => List[JdbcValue[_]] ) extends Batch[T] {
+case class BatchImpl[T](conn: Connection, statement: String ) ( proc: T => List[JdbcValue[?]] ) extends Batch[T] {
 
-  val stmt = conn.conn.prepareStatement(statement)
+  val stmt = conn.prepareStatement(statement)
 
   var toBeCommit = 0
 
   def addBatch(value: T): Unit = {
-    val args = proc(value)
+    val args: Seq[JdbcValue[?]] = proc(value)
     var idx = 1
 
     while( idx <= args.size ){

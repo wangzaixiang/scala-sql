@@ -18,7 +18,7 @@ import scala.reflect.ClassTag
 object Row {
 
   sealed abstract class Cell[T](val name: String, val sqltype: Int, val value: T) {
-    @inline def ??? = throw new UnsupportedOperationException
+    inline def ??? = throw new UnsupportedOperationException
     def getString: String = if (value == null) null else value.toString
     def getLong: Long  = ???
     def getInt: Int = getLong.toInt
@@ -140,10 +140,9 @@ object Row {
     new Row(cells)
   }
 
-  implicit val resultSetMapper: ResultSetMapper[Row] = new ResultSetMapper[Row] {
+  given resultSetMapper: ResultSetMapper[Row] with
     override def from(rs: ResultSet): Row = resultSetToRow(rs.getMetaData, rs)
-  }
-
+  
 }
 
 // make Row extends ResultSet so we can using JavaValueAccessor.

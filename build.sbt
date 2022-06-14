@@ -2,15 +2,15 @@ organization := "com.github.wangzaixiang"
 
 name := "scala-sql"
 
-version := "2.0.7"
+version := "3.0.0"
 
-scalaVersion := "2.13.7"
+scalaVersion := "3.1.2"
 
-crossScalaVersions := Seq("2.11.12", "2.12.15")
+// crossScalaVersions := Seq("2.11.12", "2.12.15")
 
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.9",
-  "org.scala-lang" % "scala-reflect" % scalaVersion.value,
+  // "org.scala-lang" % "scala-reflect" % scalaVersion.value,
   "com.github.jsqlparser" % "jsqlparser" % "1.2",
 
   "com.h2database" % "h2" % "1.4.184" % "test",
