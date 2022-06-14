@@ -230,19 +230,19 @@ given _rsm_bd: ResultSetMapper[BigDecimal] with
 
 class JdbcValueAccessor_Option[T: JdbcValueAccessor] extends JdbcValueAccessor[Option[T]]:
   def passIn(stmt: PreparedStatement, index: Int, value: Option[T]): Unit = value match
-    case Some(t) => implicitly[JdbcValueAccessor[T]].passIn(stmt, index, t)
+    case Some(t) => summon[JdbcValueAccessor[T]].passIn(stmt, index, t)
     case None => stmt.setObject(index, null) // TODO or setNull
 
 
   def passOut(rs: ResultSet, index: Int): Option[T] =
     if (rs.getObject(index) == null) None
     else
-      Some(implicitly[JdbcValueAccessor[T]].passOut(rs, index))
+      Some(summon[JdbcValueAccessor[T]].passOut(rs, index))
 
   def passOut(rs: ResultSet, name: String): Option[T] =
     if (rs.getObject(name) == null) None
     else
-      Some(implicitly[JdbcValueAccessor[T]].passOut(rs, name))
+      Some(summon[JdbcValueAccessor[T]].passOut(rs, name))
 
 
 given JdbcValueAccessor[Array[Byte]] with
@@ -292,9 +292,7 @@ case class ResultSetWrapper(rs: ResultSet):
 /**
   * the base class used in automate generated ResultSetMapper.
   */
-// abstract class CaseClassResultSetMapper[T] extends ResultSetMapper[T]:
-
-  // cammel case mapping support such as userId -> user_id, postURL -> post_url
+// cammel case mapping support such as userId -> user_id, postURL -> post_url
 case class CaseField[T: JdbcValueAccessor](name: String, default: Option[T] = None):
 
     val underscoreName: Option[String] = {
@@ -329,7 +327,12 @@ case class CaseField[T: JdbcValueAccessor](name: String, default: Option[T] = No
       else {
         default match {
           case Some(m) => m
-          case None => throw new RuntimeException(s"The ResultSet have no field $name but it is required")
+          case None =>  // if this type is Option[X], return None
+            summon[JdbcValueAccessor[T]] match {
+              case x: JdbcValueAccessor_Option[?] => None.asInstanceOf[T]
+              case _ => throw new RuntimeException(s"The ResultSet have no field $name but it is required")
+            }
+
         }
       }
     }

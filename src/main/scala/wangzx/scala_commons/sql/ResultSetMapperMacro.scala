@@ -60,11 +60,13 @@ object ResultSetMapperMacro:
       val tpeSym = TypeTree.of[T].symbol
       val children = tpeSym.caseFields
 
+      // val _rs: ResultSetWrapper = new ResultSetWrapper(rs)
       val _rsSym = Symbol.newVal(Symbol.spliceOwner, "_rs", TypeTree.of[ResultSetWrapper].tpe, Flags.EmptyFlags, Symbol.noSymbol)
       val _rsExpr = '{ new ResultSetWrapper($rs) }
       val _rsVal = ValDef(_rsSym, Some(_rsExpr.asTerm))
       val _rsRef = Ref(_rsSym).asExpr.asInstanceOf[Expr[ResultSetWrapper]]
 
+      // val fieldXXX = new CaseField[T]("fieldXXX", Some(defaultValue)).apply(_rs)
       val varsAndDefs: List[(Symbol, ValDef)] = children.map(rsGetField[T](_rsRef, _))
 
       val companion = tpeSym.companionModule

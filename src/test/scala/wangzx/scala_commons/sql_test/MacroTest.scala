@@ -9,7 +9,7 @@ import java.net.URL
 
 object MacroTest {
 
-  case class User(name: java.lang.String, age: Int, classRoom: Int = 1)
+  case class User(name: java.lang.String, age: Option[Int], classRoom: Int = 1)
 
   def getMetadata(data: Map[String, Any]): ResultSetMetaData = new ResultSetMetaData:
     override def getColumnCount: Int = data.size
@@ -43,6 +43,7 @@ object MacroTest {
           case "getString" => data(fieldName(args))
           case "getInt" => data(fieldName(args))
           case "getLong" => data(fieldName(args))
+          case "getObject" => data(fieldName(args))
           case "getMetaData" => getMetadata(data)
           case _ => throw new Exception(s"method ${method} not support")
         }
@@ -52,10 +53,13 @@ object MacroTest {
   def test1(): Unit ={
     val userMapper = ResultSetMapperMacro.resultSetMapper[User]
     val data = Map("name" -> "wangzx", "age" -> 18, "classRoom" -> 2)
-    assert( userMapper.from(getResultSet(data)) == User("wangzx", 18, 2) )
+    assert( userMapper.from(getResultSet(data)) == User("wangzx", Some(18), 2) )
 
     val data2 = Map("name" -> "wangzx", "age" -> 18)
-    assert( userMapper.from(getResultSet(data2)) == User("wangzx", 18, 1) )
+    assert( userMapper.from(getResultSet(data2)) == User("wangzx", Some(18), 1) )
+
+    val data3 = Map("name" -> "wangzx")
+    assert( userMapper.from(getResultSet(data3)) == User("wangzx", None, 1) )
   }
 
 }
