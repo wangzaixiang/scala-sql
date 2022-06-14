@@ -329,7 +329,6 @@ given DataSourceOps with
     def eachRow[T : ResultSetMapper](sql: SQLWithArgs)(f: T => Unit) =
       withConnection(_.eachRow[T](sql)(f))
 
-
     def rows[T : ResultSetMapper](sql: SQLWithArgs): List[T] = withConnection(_.rows[T](sql))
 
     def joinRows2[T1: ResultSetMapper, T2: ResultSetMapper](sql: SQLWithArgs): List[(T1, T2)] = withConnection(_.joinRows2[T1,T2](sql))

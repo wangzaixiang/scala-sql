@@ -18,7 +18,7 @@ object MemoryAppender {
   def getContent = buffer.toString
 
 }
-class MemoryAppender extends OutputStreamAppender {
+class MemoryAppender[E] extends OutputStreamAppender[E] {
 
   override def start(): Unit ={
 

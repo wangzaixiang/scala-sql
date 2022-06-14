@@ -1,5 +1,6 @@
 package wangzx.scala_commons.sql_test
 
+import wangzx.scala_commons.sql.given
 import wangzx.scala_commons.sql.{BeanBuilder, ResultSetMapper}
 
 import scala.language.implicitConversions
@@ -34,7 +35,7 @@ object BuilderTest {
     city: String
   )
 
-  implicit def str2Int(str: String) = str.toInt
+//  implicit def str2Int(str: String):Int = str.toInt
 
 
   def main(args: Array[String]): Unit = {

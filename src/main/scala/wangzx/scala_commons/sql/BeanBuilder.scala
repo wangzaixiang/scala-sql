@@ -10,4 +10,8 @@ import scala.language.experimental.macros
   */
 object BeanBuilder {
 
+  def build[T](sources: AnyRef*)(additions: (String, Any)*): T = ???
+
+  def build[T](sources: AnyRef*)(additions: T=>T = identity): T = ???
+
 }

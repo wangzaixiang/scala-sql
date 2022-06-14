@@ -262,16 +262,23 @@ given JdbcValueAccessor[Clob] with
 
 extension (rs: ResultSet)
 
-  def columns: Set[String] = rs match
+  def get[T: JdbcValueAccessor](index: Int): T = summon[JdbcValueAccessor[T]].passOut(rs, index)
+
+  def get[T: JdbcValueAccessor](label: String): T = summon[JdbcValueAccessor[T]].passOut(rs, label)
+
+  def getOption[T: JdbcValueAccessor](index: Int): Option[T] =
+    if (rs.getObject(index) == null) None else Some(summon[JdbcValueAccessor[T]].passOut(rs, index))
+
+case class ResultSetWrapper(rs: ResultSet):
+
+  lazy val columns: Set[String] = rs match
     case row: Row => row.cells.map(_.name).toSet
     case _ =>
       val meta = rs.getMetaData
       (for (i <- 1 to meta.getColumnCount) yield meta.getColumnLabel(i)).toSet
 
-
   def columnsUpperCase: Set[String] = columns.map(_.toUpperCase)
 
-  // TODO if database is case-sensitive, maybe need check
   def hasColumn(column: String):Boolean = columnsUpperCase.contains(column.toUpperCase)
 
   def get[T: JdbcValueAccessor](index: Int): T = summon[JdbcValueAccessor[T]].passOut(rs, index)
@@ -285,11 +292,11 @@ extension (rs: ResultSet)
 /**
   * the base class used in automate generated ResultSetMapper.
   */
-abstract class CaseClassResultSetMapper[T] extends ResultSetMapper[T] {
+// abstract class CaseClassResultSetMapper[T] extends ResultSetMapper[T]:
 
   // cammel case mapping support such as userId -> user_id, postURL -> post_url
-  case class Field[T: JdbcValueAccessor](name: String, default: Option[T] = None) {
-    // val method: Option[java.lang.reflect.Method] = defaultName.map ( companion.getClass.getMethod(_) )
+case class CaseField[T: JdbcValueAccessor](name: String, default: Option[T] = None):
+
     val underscoreName: Option[String] = {
       val sb = new StringBuilder
       var i = 0
@@ -312,7 +319,7 @@ abstract class CaseClassResultSetMapper[T] extends ResultSetMapper[T] {
       else None
     }
 
-    def apply(rs: ResultSet): T = {
+    def apply(rs: ResultSetWrapper): T = {
       if (rs hasColumn name) {
         rs.get[T](name)
       }
@@ -326,8 +333,8 @@ abstract class CaseClassResultSetMapper[T] extends ResultSetMapper[T] {
         }
       }
     }
-  }
-}
+
+
 
 trait ConnectionOps:
   extension (conn: Connection)

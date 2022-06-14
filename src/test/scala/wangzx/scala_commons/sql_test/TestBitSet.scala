@@ -3,7 +3,7 @@ package wangzx.scala_commons.sql_test
 import java.sql.DriverManager
 
 import wangzx.scala_commons.sql.mysql.MySqlBitSet
-import wangzx.scala_commons.sql._
+import wangzx.scala_commons.sql.{given, *}
 
 object TestBitSet {
 
@@ -42,7 +42,7 @@ object TestBitSet {
     conn.rows[SkuBarCode]("select * from sku_barcode").foreach(println)
 
 
-    val x: Long = MySqlBitSet.unapply(sku6.flag).get
+    val x: Long = MySqlBitSet.unapply(sku6.flag).mask
     val tbean = BeanBuilder.build[TSkuBarCode](sku6)()
     println(tbean)
 

@@ -1,6 +1,6 @@
 package wangzx.scala_commons.sql_test
 
-import wangzx.scala_commons.sql._
+import wangzx.scala_commons.sql.{given, *}
 
 @db(name = "default")
 object MacroTest2 {
@@ -12,7 +12,7 @@ object MacroTest2 {
     val name = "wang"
     val age = 10
 
-    val rs: ResultSetEx = null
+//    val rs: ResultSetEx = null
     val access = implicitly[JdbcValueAccessor[Option[Int]]]
 
     println(s"$access ${access.getClass}")

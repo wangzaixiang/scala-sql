@@ -5,7 +5,7 @@ import javax.sql.DataSource
 import scala.language.implicitConversions
 
 import wangzx.scala_commons.sql.DbEnum
-import wangzx.scala_commons.sql._
+import wangzx.scala_commons.sql.{given, *}
 
 object EnumTest {
 
@@ -61,8 +61,8 @@ object EnumTest {
 //      orderStatus: Option[Int]    // not works
   )
 
-  implicit def orderStatus2TOrderStatus(obj: OrderStatus) = TOrderStatus(obj.id)
-  implicit def torderStatus2OrderStatus(obj: TOrderStatus) = OrderStatus.valueOf(obj.id)
+  implicit def orderStatus2TOrderStatus(obj: OrderStatus): TOrderStatus = TOrderStatus(obj.id)
+  implicit def torderStatus2OrderStatus(obj: TOrderStatus): OrderStatus = OrderStatus.valueOf(obj.id)
 
   def main(args: Array[String]): Unit = {
     val dataSource: DataSource = null
