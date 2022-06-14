@@ -38,7 +38,7 @@ object ResultSetMapperMacro:
         case Some(deff) => '{ Some($deff) }
         case None => '{ None }
 
-      val rsGet = expr match {
+      val rsGet = expr match
         case '{ $x: t } =>
           val typet = TypeTree.of[t]
           Expr.summon[JdbcValueAccessor[t]] match
@@ -47,7 +47,6 @@ object ResultSetMapperMacro:
             case None =>
               report.error(s"No JdbcValueAccessor found, owner:${TypeTree.of[T].show} field:$name type:${typet.show}")
               '{ ??? }
-      }
 
       val variable = Symbol.newVal(Symbol.spliceOwner, name,
         field.tree.asInstanceOf[ValDef].tpt.tpe, Flags.EmptyFlags, Symbol.noSymbol)
