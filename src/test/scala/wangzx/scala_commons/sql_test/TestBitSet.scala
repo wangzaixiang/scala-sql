@@ -43,11 +43,11 @@ object TestBitSet {
 
 
     val x: Long = MySqlBitSet.unapply(sku6.flag).mask
-    val tbean = BeanBuilder.build[TSkuBarCode](sku6)()
-    println(tbean)
+//    val tbean = BeanBuilder.build[TSkuBarCode](sku6)()
+//    println(tbean)
 
-    val y = BeanBuilder.build[SkuBarCode](tbean)()
-    println(y)
+//    val y = BeanBuilder.build[SkuBarCode](tbean)()
+//    println(y)
 
 
   }

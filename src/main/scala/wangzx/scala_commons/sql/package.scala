@@ -80,6 +80,8 @@ object JdbcValue:
   given [T: JdbcValueAccessor]: Conversion[T, JdbcValue[T]] with
     override def apply(t: T) = JdbcValue(t)
 
+  // implicit def convert1[T](t: T) = JdbcValue(t)
+
   given [T: JdbcValueAccessor]: Conversion[Option[T], JdbcValue[Option[T]]] with
     override def apply(t: Option[T]) = JdbcValue(t)(new JdbcValueAccessor_Option[T])
 
@@ -295,49 +297,37 @@ case class ResultSetWrapper(rs: ResultSet):
 // cammel case mapping support such as userId -> user_id, postURL -> post_url
 case class CaseField[T: JdbcValueAccessor](name: String, default: Option[T] = None):
 
-    val underscoreName: Option[String] = {
+    val underscoreName: Option[String] =
       val sb = new StringBuilder
       var i = 0
       var lastChar: Char = 0
-      while (i < name.length) {
+      while i < name.length do
         val ch = name.charAt(i)
         if (i == 0) sb.append(ch)
-        else {
-          if (Character.isLowerCase(lastChar) && Character.isUpperCase(ch)) {
+        else
+          if Character.isLowerCase(lastChar) && Character.isUpperCase(ch) then
             sb.append('_')
             sb.append(ch.toLower)
-          }
           else sb.append(ch)
-        }
         lastChar = ch
         i += 1
-      }
+
       val newName = sb.toString
       if (newName != name) Some(newName)
       else None
-    }
 
-    def apply(rs: ResultSetWrapper): T = {
-      if (rs hasColumn name) {
+    def apply(rs: ResultSetWrapper): T =
+      if rs hasColumn name then
         rs.get[T](name)
-      }
-      else if (underscoreName.nonEmpty && rs.hasColumn(underscoreName.get)) {
+      else if underscoreName.nonEmpty && rs.hasColumn(underscoreName.get) then
         rs.get[T](underscoreName.get)
-      }
-      else {
-        default match {
+      else
+        default match
           case Some(m) => m
           case None =>  // if this type is Option[X], return None
-            summon[JdbcValueAccessor[T]] match {
+            summon[JdbcValueAccessor[T]] match
               case x: JdbcValueAccessor_Option[?] => None.asInstanceOf[T]
               case _ => throw new RuntimeException(s"The ResultSet have no field $name but it is required")
-            }
-
-        }
-      }
-    }
-
-
 
 trait ConnectionOps:
   extension (conn: Connection)
@@ -378,8 +368,3 @@ trait DataSourceOps:
     def joinRow3[T1:ResultSetMapper, T2:ResultSetMapper, T3: ResultSetMapper](sql: SQLWithArgs): Option[(T1,T2, T3)]
     def joinRow4[T1:ResultSetMapper, T2:ResultSetMapper, T3: ResultSetMapper, T4:ResultSetMapper](sql: SQLWithArgs): Option[(T1,T2,T3,T4)]
     def queryInt(sql:SQLWithArgs): Int
-
-//given connectionOps: ConnectionOps = RichConnection
-
-
-

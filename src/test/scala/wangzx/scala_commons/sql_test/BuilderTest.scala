@@ -3,7 +3,7 @@ package wangzx.scala_commons.sql_test
 import wangzx.scala_commons.sql.given
 import wangzx.scala_commons.sql.{BeanBuilder, ResultSetMapper}
 
-import scala.language.implicitConversions
+import scala.quoted.*
 
 object BuilderTest {
 
@@ -23,10 +23,11 @@ object BuilderTest {
 
   case class Person
   (
-    id: String,
+    id: Int,
     name: String,
-    opId: List[String],
-    address: PersonAddress,
+    opId: List[Int],
+    address: UserAddress,
+    score: Option[Int]
     //dady: Person
   )
   case class PersonAddress
@@ -35,23 +36,35 @@ object BuilderTest {
     city: String
   )
 
-//  implicit def str2Int(str: String):Int = str.toInt
 
 
   def main(args: Array[String]): Unit = {
 
-    val someStr = Some("123")
+//    val someStr = Some("123")
     //val someInt = someStr.copyTo[Int]
-    val userMapper: ResultSetMapper[PersonAddress] = ResultSetMapper.material[PersonAddress]
+//    val userMapper: ResultSetMapper[PersonAddress] = ResultSetMapper.material[PersonAddress]
 
     //val dady = Person("120", "wangzx", Some("120"), PersonAddress("gd", "gz"))
-    val person = Person("123", "wangzhx", List("123"), PersonAddress("gd", "gz"))
-    val user = BeanBuilder.build[User](person)("score"->Some(100))
+    val person = Person(123, "wangzhx", List(123), UserAddress("gd", "gz"), Some(100))
 
-    // new build method
-    val user2 = BeanBuilder.build[User](person)(_.copy(
-      score = Some(100), name="rainbow"))
+//    val userAddress = BuilderTestHelper.build1[UserAddress](person.address)
+    val user = BeanBuilder.build[User](person, Some("123"))("score"->Some(100))
+//
+//    // new build method
+//    val user2 = BeanBuilder.build[User](person)(_.copy(
+//      score = Some(100), name="rainbow"))
 
+    /**
+     * val users = {
+     *   val f1 = person.f1
+     *   val f2 = peson.f2
+     *   val f2 = Some(100)
+     *   val f4 = "rainbow"
+     *   User(f1, f2, f3, f4)
+     * }
+     */
+
+    println("user: " + user)
     assert( user == User(123, "wangzhx", List(123), UserAddress("gd", "gz"), Some(100)))
   }
 
