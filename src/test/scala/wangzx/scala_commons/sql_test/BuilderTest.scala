@@ -23,11 +23,11 @@ object BuilderTest {
 
   case class Person
   (
-    id: Int,
+    id: String,
     name: String,
-    opId: List[Int],
+    opId: List[String],
     address: UserAddress,
-    score: Option[Int]
+//    score: Option[Int]
     //dady: Person
   )
   case class PersonAddress
@@ -37,35 +37,17 @@ object BuilderTest {
   )
 
 
+given Conversion[String, Int] with
+    def apply(x: String): Int = Integer.parseInt(x)
 
   def main(args: Array[String]): Unit = {
 
-//    val someStr = Some("123")
-    //val someInt = someStr.copyTo[Int]
-//    val userMapper: ResultSetMapper[PersonAddress] = ResultSetMapper.material[PersonAddress]
+    val person = Person("123", "wangzhx", List("111"), UserAddress("gd", "gz") )
 
-    //val dady = Person("120", "wangzx", Some("120"), PersonAddress("gd", "gz"))
-    val person = Person(123, "wangzhx", List(123), UserAddress("gd", "gz"), Some(100))
-
-//    val userAddress = BuilderTestHelper.build1[UserAddress](person.address)
     val user = BeanBuilder.build[User](person, Some("123"))("score"->Some(100))
-//
-//    // new build method
-//    val user2 = BeanBuilder.build[User](person)(_.copy(
-//      score = Some(100), name="rainbow"))
 
-    /**
-     * val users = {
-     *   val f1 = person.f1
-     *   val f2 = peson.f2
-     *   val f2 = Some(100)
-     *   val f4 = "rainbow"
-     *   User(f1, f2, f3, f4)
-     * }
-     */
-
-    println("user: " + user)
-    assert( user == User(123, "wangzhx", List(123), UserAddress("gd", "gz"), Some(100)))
+    assert( user == User(123, "wangzhx", List(111), UserAddress("gd", "gz"), Some(100)) )
+    println("passed")
   }
 
 }

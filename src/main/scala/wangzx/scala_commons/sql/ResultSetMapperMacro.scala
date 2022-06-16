@@ -54,7 +54,10 @@ object ResultSetMapperMacro:
         }
       }.asExpr.asInstanceOf[Expr[T]]
 
-    '{
+    val expr = '{
     new ResultSetMapper[T]:
       def from(rs: ResultSet): T = ${buildBeanFromRs('{rs})}
     }
+
+    // println("generate code " + expr.show)
+    expr
