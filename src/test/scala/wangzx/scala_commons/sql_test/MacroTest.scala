@@ -60,6 +60,8 @@ object MacroTest {
 
     val data3 = Map("name" -> "wangzx")
     assert( userMapper.from(getResultSet(data3)) == User("wangzx", None, 1) )
+
+    println("passed")
   }
 
 }
