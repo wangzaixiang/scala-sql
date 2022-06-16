@@ -10,13 +10,6 @@ object ResultSetMapperMacro:
   def resultSetMapperImpl[T: Type](using Quotes): Expr[ResultSetMapper[T]] =
     import quotes.reflect.*
 
-    // '{ (null: T).field }
-    def exprForField[T: Type](field: Symbol): Expr[?] =
-      val typetree = TypeTree.of[T]
-      val nullObj = Typed(Literal(NullConstant()), typetree)
-      val fieldTypeTree = field.tree.asInstanceOf[ValDef].tpt
-      Typed( Select.unique (nullObj, field.name), fieldTypeTree).asExpr
-
     val defaultParams: Map[String, Expr[Any]] =
       val sym = TypeTree.of[T].symbol
       val comp = sym.companionClass
@@ -36,23 +29,20 @@ object ResultSetMapperMacro:
         case Some(deff) => '{ Some($deff) }
         case None => '{ None }
 
-      val expr = exprForField[T](field) match
-        case '{ $x: t } =>
-          val typet = TypeTree.of[t]
+      val expr = field.tree.asInstanceOf[ValDef].tpt.tpe.asType match {
+        case '[t] =>
           Expr.summon[JdbcValueAccessor[t]] match
             case Some(accessor) =>
               '{ new CaseField[t](${Expr(name)}, ${defaultExpr}.asInstanceOf[Option[t]])(using $accessor).apply($rs) }
             case None =>
-              report.error(s"No JdbcValueAccessor found, owner:${TypeTree.of[T].show} field:$name type:${typet.show}")
+              report.error(s"No JdbcValueAccessor found, owner:${TypeTree.of[T].show} field:$name type:${TypeTree.of[t].show}")
               '{ ??? }
+      }
       expr.asTerm
 
     // '{ new T( field1, field2, ... ) }
-    def buildBeanFromRs(rs: Expr[ResultSet]): Expr[T] = {
-
+    def buildBeanFromRs(rs: Expr[ResultSet]): Expr[T] =
       val tpeSym = TypeTree.of[T].symbol
-
-      // val _rs: ResultSetWrapper = new ResultSetWrapper(rs)
       val _rsWrapper: Expr[ResultSetWrapper] = '{ new ResultSetWrapper($rs) }
 
       ValDef.let( Symbol.spliceOwner, _rsWrapper.asTerm) { _rsRef =>
@@ -63,8 +53,6 @@ object ResultSetMapperMacro:
           Apply(Select(Ref(companion), applyMethod), refs)
         }
       }.asExpr.asInstanceOf[Expr[T]]
-
-    }
 
     '{
     new ResultSetMapper[T]:
