@@ -6,6 +6,8 @@ version := "3.0.0"
 
 scalaVersion := "3.1.2"
 
+// scalacOptions := Seq( "-Yexplicit-nulls" )
+
 // crossScalaVersions := Seq("2.11.12", "2.12.15")
 
 libraryDependencies ++= Seq(

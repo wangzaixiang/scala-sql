@@ -24,34 +24,160 @@ object Macros {
   def createMysqlBatchImpl[T: Type](proc: Expr[T=>SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
     '{ null }
 
+  // Box[f] => Box[t] = src.map( summon[f=>t] )
+  private def mapElement[f:Type, t:Type](using quotes:Quotes)(src: Expr[f]): Option[Expr[t]] = {
+    import quotes.reflect.*
+    val fw = TypeTree.of[f].tpe.widen
+    val tw = TypeTree.of[t].tpe.widen
+
+    (fw, tw) match
+      case (AppliedType(fbase, fargs), AppliedType(tbase, targs)) if fbase == tbase && fargs.size == targs.size && fargs.size == 1 =>
+        val farg:TypeRepr = fargs(0)
+        val targ:TypeRepr = targs(0)
+
+        (farg.asType, targ.asType) match
+          case ('[fa], '[ta]) => // TODO check expr having map method
+            Expr.summon[Conversion[fa, ta]] match
+              case Some(conv) =>
+                 val x = Apply(TypeApply(Select.unique(src.asTerm, "map"), List(TypeTree.of[ta])), List(conv.asTerm))
+                 Some (x.asExpr.asInstanceOf[Expr[t]])
+              case None => None
+      case _ => None
+  }
+
+//  private def mapBox[f:Type, t:Type](using quotes:Quotes)(src: Expr[f]): Option[Expr[t]] =
+//    import quotes.reflect.*
+//
+//    (TypeRepr.of[f].widen, TypeRepr.of[t].widen) match {
+//      case (AppliedType(fbase, fargs), AppliedType(tbase, targs)
+//        if fargs.size == targs.size && fargs.size == 1 && fargs(0) == targs(0) =>
+//
+//
+//    }
+
+//  private def dumpTypeRepr(using quotes: Quotes)(tpe: quotes.reflect.TypeRepr) = {
+//    import quotes.reflect.*
+//    println(s"show = ${tpe.show(using Printer.TypeReprStructure)}")
+//    println("widen " + tpe.widen)
+//    println("dealias = " + tpe.dealias)
+//    println("typeSymbol = " + tpe.typeSymbol)
+//    println("termSymbol = " + tpe.termSymbol)
+//    println("isSingleton = " + tpe.isSingleton)
+//    println("baseClasses = " + tpe.baseClasses)
+//
+//    tpe.typeSymbol.companionModule.methodMembers.foreach(dumpSymbol)
+//    println();
+//  }
+//
+//  private def dumpSymbol(using quotes: Quotes)(sym: quotes.reflect.Symbol) = {
+//    if(sym.name == "apply") {
+//      println("sym = " + sym)
+//      println("params = " + sym.paramSymss)
+//    }
+//  }
+
+  private def tryBuildImpl[f: Type, t: Type](using quotes:Quotes)(src: Expr[f]): Option[Expr[t]] =
+    import quotes.reflect._
+
+    if TypeRepr.of[f].widen.typeSymbol.flags.is(Flags.Case) && TypeRepr.of[t].widen.typeSymbol.flags.is(Flags.Case)
+    then
+      val x = '{ Seq($src) }
+      Some( buildImpl1[t](x.asInstanceOf[Expr[Seq[AnyRef]]])('{Seq()} ) )
+    else None
+
+
+  private def convert(using quotes: Quotes)(src: Expr[Any], destTpe: quotes.reflect.TypeRepr): Expr[Any] =
+    import quotes.reflect.*
+    (src.asTerm.tpe.asType, destTpe.asType) match
+      case ('[f], '[t]) =>
+        val f_tpe = TypeTree.of[f].tpe
+        val t_tpe = TypeTree.of[t].tpe
+
+        def directConvert: Option[Expr[Any]] =
+          if f_tpe <:< t_tpe then Some(src)
+          else None
+
+        def implicitConversion: Option[Expr[Any]] = Expr.summon[Conversion[f,t]] match
+          case Some(conv) => Some( '{ $conv( ${src.asInstanceOf[Expr[f]]} ) } )
+          case None => None
+
+        // X[a] => Y[a]
+        def boxConvert: Option[Expr[Any]] = None
+
+        // X[a] => Y[b]
+        def mapBoxAndElement: Option[Expr[Any]] = None
+
+        // src.copyTo[t]
+        def implicitCopyTo: Option[Expr[Any]] =
+          try
+            val term = Apply(TypeApply(Select.unique(src.asTerm, "copyTo"), List(TypeTree.of[t])), List())
+            Some(term.asExpr.asInstanceOf[Expr[Any]])
+          catch
+            case ex: Throwable => None
+
+        // T.apply(src)
+        // TODO check the T has a matched apply method
+        // Option.apply(src)
+        // or Option.apply[f](src): t
+        def simpleApply: Option[Expr[Any]] =
+          // check t.apply
+//          val tpe = TypeRepr.of[Option[Int]]
+//          dumpTypeRepr(tpe)
+
+          None
+//          try
+//            val term = Apply(TypeApply(Select.unique( Ref(TypeTree.of[t].symbol.companionModule), "apply"), List(TypeTree.of[f])), List(src.asTerm))
+//            println("term  = " + term.show)
+//            Some(term.asExpr.asInstanceOf[Expr[Any]])
+//          catch
+//            case ex: Throwable => None
+
+        // F.unapply(src).get
+        def simpleUnapply: Option[Expr[Any]] = None
+
+        def failed: Expr[Any] =
+          report.error(s"*** unsupported conversion ${f_tpe.show} -> ${t_tpe.show}")
+          '{ ??? }
+
+        directConvert
+          .orElse(implicitConversion)
+          .orElse( mapElement[f,t](src.asInstanceOf[Expr[f]]) )
+          // todo X[a] => X[b]  if exists Conversion[a,b]
+          // todo X[a] => Y[a]  if exists Converion[X[a], Y[a]]
+          // todo X[a] => Y[b]  if exists Conversion[a, b] && Conversion[X[a], Y[a]]
+          .orElse( simpleApply )
+          .orElse( tryBuildImpl[f,t](src.asInstanceOf[Expr[f]]) )
+          .getOrElse(failed)
+
+
+  def extractSeq(seqs: Expr[Seq[Any]])(using quotes: Quotes): List[quotes.reflect.Term] =
+    import quotes.reflect.*
+    seqs.asTerm match
+      case Inlined(_, Nil, Typed(Repeated(terms, _), _)) => terms
+      case Inlined(_, Nil, Apply( TypeApply( Select(seq, "apply"), _), List(Typed(Repeated(terms, _), _)))) => terms
+      case _ => Nil
+
   def buildImpl1[T:Type](sources: Expr[Seq[AnyRef]])(additions: Expr[Seq[(String, Any)]])(using Quotes): Expr[T] =
     import quotes.reflect.*
 
-    val sourceFields: Map[Term, Map[String, Symbol]] = sources.asTerm match
-      case Inlined(_, Nil, Typed(Repeated(terms, tpt1), tpt2)) =>
-        terms.filter(_.tpe.typeSymbol.flags.is(Flags.Case)).map { term =>
-          val tpeSym = term.tpe.typeSymbol
-          (term, tpeSym.caseFields.map( f => (f.name, f) ).toMap)
-        }.toMap
-      case _ =>
-        println("*** unmatched")
-        Map()
+    assert( TypeTree.of[T].symbol.flags.is(Flags.Case) )
 
-    val adds: Map[String, Expr[Any]] = additions.asTerm match
-      case Inlined(_, Nil, Typed(Repeated(terms, _), _)) =>
-        terms.flatMap { term =>
-          // println("\tterm:" + term.show(using Printer.TreeStructure))
+    // Expr[Seq[AnyRef]] => Seq[Expr[AnyRef]]
+    val sourceFields: Map[Term, Map[String, Symbol]] = extractSeq(sources).filter(_.tpe.typeSymbol.flags.is(Flags.Case))
+      .map { term =>
+        val tpeSym = term.tpe.typeSymbol
+        (term, tpeSym.caseFields.map( f => (f.name, f) ).toMap)
+      }.toMap
+
+    val additionParams: Map[String, Expr[Any]] = extractSeq(additions).flatMap { term =>
           term.asExpr match {
             case '{ ($a: String) -> ($b: Any) } =>
               Some( Expr.unapply(a).get -> b )
             case _ => // TODO support (String, Any)
-              report.error("*** unmatched")
+              report.error("*** unmatched 144")
               None
           }
         }.toMap
-      case _ =>
-        report.error("*** unmatched")
-        Map()
 
     val fields = TypeTree.of[T].tpe.typeSymbol.caseFields
 
@@ -62,66 +188,18 @@ object Macros {
       println("dump:" + source.asTerm.show(using Printer.TreeStructure))
       source
 
-    // dump('{ val x = List("123"); x.map(null: Conversion[String,Int])})
-    // TODO support converters
-    def convert(expr: Expr[Any], field: Symbol): Expr[Any] =
-      (expr.asTerm.tpe.asType, field.tree.asInstanceOf[ValDef].tpt.tpe.asType) match
-        case ('[f], '[t]) =>
-          val f_tpe = TypeTree.of[f].tpe
-          val t_tpe = TypeTree.of[t].tpe
-
-          def directConvert: Option[Expr[Any]] =
-            if f_tpe <:< t_tpe then Some(expr)
-            else None
-
-          def implicitConversion: Option[Expr[Any]] = Expr.summon[Conversion[f,t]] match
-            case Some(conv) => Some( '{ $conv( ${expr.asInstanceOf[Expr[f]]} ) } )
-            case None => None
-
-          // Box[F] => Box[T]
-          def boxMap: Option[Expr[Any]] =
-            val f1 = TypeTree.of[f].tpe.widen
-            val t1 = TypeTree.of[t].tpe.widen
-
-            // TypeRepr -> TypeTree
-            (f1, t1) match {
-              case (AppliedType(fbase, fargs), AppliedType(tbase, targs)) if fbase == tbase && fargs.size == targs.size && fargs.size == 1 =>
-                val farg = fargs(0)
-                val targ = targs(0)
-
-                (farg.asType, targ.asType) match {
-                  case ('[fa], '[ta]) =>
-                    // TODO check expr having map method
-                    Expr.summon[Conversion[fa, ta]] match
-                      case Some(conv) =>
-                        val x = Apply( TypeApply( Select.unique( expr.asTerm, "map"), List(TypeTree.of[ta])), List(conv.asTerm))
-                        Some( x.asExpr )
-                      case None => None
-                }
-            }
-
-          def failed: Expr[Any] =
-            report.error(s"*** unsupported conversion ${f_tpe.show} -> ${t_tpe.show}")
-            '{ ??? }
-
-          directConvert
-            .orElse(implicitConversion)
-            .orElse(boxMap)
-            .getOrElse(failed)
-
     val fieldMaps: List[(Symbol, Expr[Any])] = fields.map { field =>
       val name = field.name
 
-      def defaults = defaultParams.get(name) match {
+      def defaultValue: Option[Expr[Any]] = defaultParams.get(name) match {
         case Some(expr) => Some(expr)
         case None => // test field's type is Option[?]
-          val tpe = field.tree.asInstanceOf[ValDef].tpt.tpe
-          val isOption = false // TODO
+          val isOption = field.tree.asInstanceOf[ValDef].tpt.tpe.widen.typeSymbol == TypeTree.of[Option[String]].tpe.widen.typeSymbol  // TODO
           if isOption then Some('{ None })
           else None
       }
 
-      def fromSources: Option[Expr[Any]] =
+      def fromSourceFields: Option[Expr[Any]] =
         sourceFields.toList.filter { case (term, fields) => fields.contains(name) }.map {
           case (term, fields) =>
             Select.unique(term, name).asExpr.asInstanceOf[Expr[Any]]
@@ -133,12 +211,12 @@ object Macros {
             None
         }
 
-      val expr = adds.get(name)
-        .orElse(fromSources)
-        .orElse(defaults)
+      val expr = additionParams.get(name)
+        .orElse(fromSourceFields)
+        .orElse(defaultValue)
 
       expr match
-        case Some(expr) => (field, convert(expr, field))
+        case Some(expr) => (field, convert(expr, field.tree.asInstanceOf[ValDef].tpt.tpe))
         case None =>
           report.error(s"field $name not found")
           ???
@@ -150,7 +228,7 @@ object Macros {
       Apply( Select(Ref(companion), applyMethod), refs)
     }
 
-
+    // dump('{ val x = List("123"); x.map(null: Conversion[String,Int])})
 
 //    println("!!!! generate block now..")
 //    dump(block.asExpr)

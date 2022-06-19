@@ -26,9 +26,7 @@ object BuilderTest {
     id: String,
     name: String,
     opId: List[String],
-    address: UserAddress,
-//    score: Option[Int]
-    //dady: Person
+    address: PersonAddress,
   )
   case class PersonAddress
   (
@@ -37,15 +35,16 @@ object BuilderTest {
   )
 
 
-given Conversion[String, Int] with
+  given Conversion[String, Int] with
     def apply(x: String): Int = Integer.parseInt(x)
 
   def main(args: Array[String]): Unit = {
 
-    val person = Person("123", "wangzhx", List("111"), UserAddress("gd", "gz") )
+    val person = Person("123", "wangzhx", List("111"), PersonAddress("gd", "gz") )
 
-    val user = BeanBuilder.build[User](person, Some("123"))("score"->Some(100))
+    val user = BeanBuilder.build[User](person, Some("123"))( "score"-> Some(100) )
 
+    println(s"person = $person, user = $user")
     assert( user == User(123, "wangzhx", List(111), UserAddress("gd", "gz"), Some(100)) )
     println("passed")
   }
