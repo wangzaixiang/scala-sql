@@ -51,15 +51,19 @@ object MacroTest {
 
   @main
   def test1(): Unit ={
-    val userMapper = ResultSetMapperMacro.resultSetMapper[User]
+    // val userMapper = ResultSetMapperMacro.resultSetMapper[User]
+    def test[T: ResultSetMapper](data: Map[String, Any]): T =
+      val mapper = summon[ResultSetMapper[T]]
+      mapper.from(getResultSet(data))
+
     val data = Map("name" -> "wangzx", "age" -> 18, "classRoom" -> 2)
-    assert( userMapper.from(getResultSet(data)) == User("wangzx", Some(18), 2) )
+    assert( test[User](data) == User("wangzx", Some(18), 2) )
 
     val data2 = Map("name" -> "wangzx", "age" -> 18)
-    assert( userMapper.from(getResultSet(data2)) == User("wangzx", Some(18), 1) )
+    assert( test[User](data) == User("wangzx", Some(18), 1) )
 
     val data3 = Map("name" -> "wangzx")
-    assert( userMapper.from(getResultSet(data3)) == User("wangzx", None, 1) )
+    assert( test[User](data) == User("wangzx", None, 1) )
 
     println("passed")
   }

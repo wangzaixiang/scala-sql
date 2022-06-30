@@ -3,6 +3,7 @@ package wangzx.scala_commons.sql
 import java.sql.*
 import scala.quoted.*
 
+// TODO refact code from experience of wjson
 object ResultSetMapperMacro:
 
   inline def resultSetMapper[T] = ${resultSetMapperImpl[T]}
