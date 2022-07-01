@@ -1,7 +1,6 @@
 package wangzx.scala_commons.sql_test
 
-import wangzx.scala_commons.sql.given
-import wangzx.scala_commons.sql.{BeanBuilder, ResultSetMapper}
+import wsql.*
 
 import scala.quoted.*
 

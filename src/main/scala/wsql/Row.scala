@@ -1,4 +1,4 @@
-package wangzx.scala_commons.sql
+package wsql
 
 import java.sql._
 import java.lang.{Boolean => JBoolean, Byte => JByte, Integer => JInteger, Long => JLong, Short => JShort}
@@ -27,10 +27,7 @@ object Row {
     def getDouble: Double = getLong.toDouble
     def getFloat: Float = getDouble.toFloat
     def getBoolean: Boolean = getLong != 0
-    def getBigDecimal: JBigDecimal = {
-      val long = getLong
-      new JBigDecimal(long)
-    }
+    def getBigDecimal: JBigDecimal = new JBigDecimal(getLong)
     def getScalaBigDecimal = BigDecimal(getBigDecimal)
 
     def getDate: java.sql.Date = ???
@@ -209,8 +206,8 @@ class Row(val cells: Seq[Row.Cell[_]]) extends ResultSet {
   def getObject(index: Int): AnyRef = cell(index).getObject
   def getObject(key: String): AnyRef = cell(key).getObject
 
-  def get[T: JdbcValueAccessor](index: Int): T = implicitly[JdbcValueAccessor[T]].passOut(this, index)
-  def get[T: JdbcValueAccessor](key: String): T = implicitly[JdbcValueAccessor[T]].passOut(this, key)
+  def get[T: JdbcValueAccessor](index: Int): T = summon[JdbcValueAccessor[T]].passOut(this, index)
+  def get[T: JdbcValueAccessor](key: String): T = summon[JdbcValueAccessor[T]].passOut(this, key)
 
   //
   def getBigDecimal(columnIndex: Int, scale: Int): JBigDecimal = ???

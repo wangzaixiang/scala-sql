@@ -1,13 +1,11 @@
-package wangzx.scala_commons.sql
+package wsql
 
-import java.sql._
-
+import java.sql.*
 import scala.collection.mutable.ListBuffer
 
 given ConnectionOps with
 
   import org.slf4j.{LoggerFactory, Logger}
-
   val LOG: Logger = LoggerFactory.getLogger(getClass)
 
   extension (conn: Connection)
@@ -96,7 +94,7 @@ given ConnectionOps with
       t.get
 
 
-    def eachRow[T: ResultSetMapper](sql: SQLWithArgs)(f: T => Unit) = withPreparedStatement(sql.sql) { prepared =>
+    def eachRow[T: ResultSetMapper](sql: SQLWithArgs)(f: T => Unit): Unit = withPreparedStatement(sql.sql) { prepared =>
       if (sql.args != null) setStatementArgs(prepared, sql.args)
 
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
@@ -300,8 +298,8 @@ given ConnectionOps with
       } else throw new IllegalArgumentException("query return no rows")
     }
 
-
 given DataSourceOps with
+
   extension (datasource: javax.sql.DataSource)
     private def withConnection[T](f: Connection => T): T =
       val conn = datasource.getConnection
@@ -330,7 +328,7 @@ given DataSourceOps with
     def generateKey[T: JdbcValueAccessor](sql: SQLWithArgs): T =
       withConnection(_.generateKey[T](sql))
 
-    def eachRow[T : ResultSetMapper](sql: SQLWithArgs)(f: T => Unit) =
+    def eachRow[T : ResultSetMapper](sql: SQLWithArgs)(f: T => Unit): Unit =
       withConnection(_.eachRow[T](sql)(f))
 
     def rows[T : ResultSetMapper](sql: SQLWithArgs): List[T] = withConnection(_.rows[T](sql))
@@ -345,4 +343,6 @@ given DataSourceOps with
     def joinRow4[T1: ResultSetMapper, T2:ResultSetMapper, T3:ResultSetMapper, T4:ResultSetMapper](sql: SQLWithArgs): Option[(T1, T2, T3, T4)] = withConnection(_.joinRow4[T1, T2, T3, T4](sql))
 
     def queryInt(sql: SQLWithArgs): Int = withConnection(_.queryInt(sql))
+
+
 

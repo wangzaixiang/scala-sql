@@ -1,14 +1,12 @@
 organization := "com.github.wangzaixiang"
 
-name := "scala-sql"
+name := "wsql"
 
 version := "3.0.0"
 
-scalaVersion := "3.1.2"
+scalaVersion := "3.1.3"
 
 // scalacOptions := Seq( "-Yexplicit-nulls" )
-
-// crossScalaVersions := Seq("2.11.12", "2.12.15")
 
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.9",
@@ -17,6 +15,8 @@ libraryDependencies ++= Seq(
 
   "com.h2database" % "h2" % "1.4.184" % "test",
   "junit" % "junit" % "4.12" % "test",
+  "org.scalatest" %% "scalatest" % "3.2.12" % "test",
+
   "ch.qos.logback" % "logback-classic" % "1.2.11" % "test",
   "ch.qos.logback" % "logback-core" % "1.2.11" % "test",
   "mysql" % "mysql-connector-java" % "5.1.38" % "test"

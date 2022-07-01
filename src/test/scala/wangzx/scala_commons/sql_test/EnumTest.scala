@@ -3,9 +3,7 @@ package wangzx.scala_commons.sql_test
 import java.sql.{PreparedStatement, ResultSet}
 import javax.sql.DataSource
 import scala.language.implicitConversions
-
-import wangzx.scala_commons.sql.DbEnum
-import wangzx.scala_commons.sql.{given, *}
+import wsql.{*, given}
 
 object EnumTest {
 

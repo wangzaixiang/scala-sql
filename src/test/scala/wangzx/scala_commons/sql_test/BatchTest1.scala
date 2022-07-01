@@ -1,6 +1,6 @@
 package wangzx.scala_commons.sql_test
 
-import wangzx.scala_commons.sql.{given, *}
+import wsql.{given, *}
 
 object BatchTest1 {
 

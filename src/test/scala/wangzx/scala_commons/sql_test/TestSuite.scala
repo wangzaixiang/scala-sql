@@ -1,8 +1,7 @@
 package wangzx.scala_commons.sql_test
 
 import org.junit.Test
-import wangzx.scala_commons.sql.{given, *}
-
+import wsql.{given, *}
 
 /**
   * Created by wangzx on 15/12/17.

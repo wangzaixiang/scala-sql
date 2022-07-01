@@ -1,6 +1,6 @@
-package wangzx.scala_commons.sql
+package wsql
 
-import wangzx.scala_commons.sql.ResultSetMapperMacro.resultSetMapperImpl
+import ResultSetMapperMacro.resultSetMapperImpl
 
 import javax.sql.DataSource
 import java.sql.{Blob, Clob, Connection, PreparedStatement, ResultSet, Statement, Timestamp}

@@ -1,9 +1,7 @@
 package wangzx.scala_commons.sql_test
 
-import wangzx.scala_commons.sql.ResultSetMapperMacro
-
 import java.sql.{ResultSet, ResultSetMetaData}
-import wangzx.scala_commons.sql.{*, given}
+import wsql.*
 
 import java.net.URL
 

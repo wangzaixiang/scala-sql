@@ -1,4 +1,4 @@
-package wangzx.scala_commons.sql
+package wsql
 
 import java.sql.*
 import scala.quoted.*

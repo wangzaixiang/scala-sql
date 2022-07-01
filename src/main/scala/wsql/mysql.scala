@@ -1,4 +1,5 @@
-package wangzx.scala_commons.sql
+package wsql
+
 import java.sql.{DriverManager, PreparedStatement, ResultSet}
 
 object mysql {

@@ -1,6 +1,7 @@
 package wangzx.scala_commons.sql_test
 
-import wangzx.scala_commons.sql.{given, *}
+import wsql.{*, given}
+import wsql.db
 
 @db(name = "default")
 object MacroTest2 {

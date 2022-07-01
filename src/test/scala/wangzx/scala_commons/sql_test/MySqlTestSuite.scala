@@ -2,8 +2,7 @@ package wangzx.scala_commons.sql_test
 
 import com.mysql.jdbc.jdbc2.optional.MysqlDataSource
 import org.junit.{Assert, Test}
-
-import wangzx.scala_commons.sql.{given, *}
+import wsql.{*, given}
 /**
   * Created by wangzx on 15/12/18.
   */
