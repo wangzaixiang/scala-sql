@@ -11,6 +11,22 @@ object ResultSetMapperMacro:
   def resultSetMapperImpl[T: Type](using Quotes): Expr[ResultSetMapper[T]] =
     import quotes.reflect.*
 
+    // extract @ColumnMapper(classOf[T]) if exists
+    val columnMapper: CaseClassColumnMapper =
+      val classSymbol = TypeTree.of[T].symbol
+      val columnMapperSymbol = TypeTree.of[UseColumnMapper].symbol
+      classSymbol.getAnnotation(columnMapperSymbol) match
+        case Some(term) =>
+          term.asExpr match   // @ColumnMapper(classOf[T])
+            case '{ UseColumnMapper(${value}) } =>
+              value match
+                case '{ $x: t } =>
+                  // println("x: " + x.show + " t: " + TypeTree.of[t].show)
+                  TypeRepr.of[t].widen.asInstanceOf[AppliedType] match
+                    case AppliedType(base, List(clazz)) =>
+                      Class.forName(clazz.widen.show).newInstance().asInstanceOf[CaseClassColumnMapper]
+        case None => IdentityMapping()
+
     val defaultParams: Map[String, Expr[Any]] =
       val sym = TypeTree.of[T].symbol
       val comp = sym.companionClass
@@ -24,17 +40,18 @@ object ResultSetMapperMacro:
       names.zip(idents).toMap
 
     // '{ new CaseField[f.type](f.name, f.default)(using JdbcValueMapper[f.type])($rs) }
-    def rsGetField[T:Type](rs: Expr[ResultSetWrapper], field: Symbol): Term =
+    def rsGetField(rs: Expr[ResultSetWrapper], field: Symbol): Term =
       val name = field.name
-      val defaultExpr: Expr[Option[Any]] = defaultParams.get(name) match
-        case Some(deff) => '{ Some($deff) }
-        case None => '{ None }
+      val columnName = columnMapper.columnName(name)
 
       val expr = field.tree.asInstanceOf[ValDef].tpt.tpe.asType match {
         case '[t] =>
           Expr.summon[JdbcValueAccessor[t]] match
             case Some(accessor) =>
-              '{ new CaseField[t](${Expr(name)}, ${defaultExpr}.asInstanceOf[Option[t]])(using $accessor).apply($rs) }
+              val defaultExpr: Expr[Option[t]] = defaultParams.get(name) match
+                case Some(deff) => '{ Some(${deff.asInstanceOf[Expr[t]]}) }
+                case None => '{ None }
+              '{ caseFieldGet[t](${Expr(columnName)}, ${defaultExpr}, $rs)(using $accessor) }
             case None =>
               report.error(s"No JdbcValueAccessor found, owner:${TypeTree.of[T].show} field:$name type:${TypeTree.of[t].show}")
               '{ ??? }
@@ -47,18 +64,16 @@ object ResultSetMapperMacro:
       val _rsWrapper: Expr[ResultSetWrapper] = '{ new ResultSetWrapper($rs) }
 
       ValDef.let( Symbol.spliceOwner, _rsWrapper.asTerm) { _rsRef =>
-        val terms: List[Term] = tpeSym.caseFields.map(field => rsGetField[T](_rsRef.asExpr.asInstanceOf[Expr[ResultSetWrapper]], field))
-        val companion = tpeSym.companionModule
-        val applyMethod = companion.memberMethod("apply").apply(0)
+        val terms: List[Term] = tpeSym.caseFields.map(field => rsGetField(_rsRef.asExpr.asInstanceOf[Expr[ResultSetWrapper]], field))
+        val constructor = TypeTree.of[T].symbol.primaryConstructor
         ValDef.let(Symbol.spliceOwner, terms) { refs =>
-          Apply(Select(Ref(companion), applyMethod), refs)
+          Apply(Select(New(TypeTree.of[T]), constructor), refs)
         }
       }.asExpr.asInstanceOf[Expr[T]]
 
     val expr = '{
-    new ResultSetMapper[T]:
-      def from(rs: ResultSet): T = ${buildBeanFromRs('{rs})}
+      new ResultSetMapper[T]:
+        def from(rs: ResultSet): T = ${buildBeanFromRs('{rs})}
     }
 
-    // println("generate code " + expr.show)
     expr

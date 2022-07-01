@@ -6,7 +6,7 @@
         </encoder>
     </appender>
 
-    <appender name="MemBuffer" class="wangzx.scala_commons.sql_test.MemoryAppender">
+    <appender name="MemBuffer" class="wsql_test.MemoryAppender">
         <encoder>
             <pattern>%-5level %logger{0} - %msg %n</pattern>
         </encoder>

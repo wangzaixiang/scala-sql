@@ -1,8 +1,7 @@
-package wangzx.scala_commons.sql_test
-
-import java.io.ByteArrayOutputStream
+package wsql_test
 
 import ch.qos.logback.core.OutputStreamAppender
+import java.io.ByteArrayOutputStream
 
 /**
   * Created by wangzx on 15/12/18.

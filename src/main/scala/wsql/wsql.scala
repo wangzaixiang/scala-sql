@@ -5,6 +5,7 @@ import ResultSetMapperMacro.resultSetMapperImpl
 import javax.sql.DataSource
 import java.sql.{Blob, Clob, Connection, PreparedStatement, ResultSet, Statement, Timestamp}
 import java.util.Date
+import scala.annotation.StaticAnnotation
 
 /**
   * wrap a sql"select * from table where id = $id" object
@@ -272,44 +273,46 @@ case class ResultSetWrapper(rs: ResultSet):
     if (rs.getObject(index) == null) None else Some(summon[JdbcValueAccessor[T]].passOut(rs, index))
 
 /**
- * the base class used in automate generated ResultSetMapper.
- *
- * TODO better API for column mapping
+ * currently, only classes supprt, dont support object yet.
  */
-// cammel case mapping support such as userId -> user_id, postURL -> post_url
-case class CaseField[T: JdbcValueAccessor](name: String, default: Option[T] = None):
+trait CaseClassColumnMapper:
+  def columnName(field: String): String
 
-    val underscoreName: Option[String] =
-      val sb = new StringBuilder
-      var i = 0
-      var lastChar: Char = 0
-      while i < name.length do
-        val ch = name.charAt(i)
-        if (i == 0) sb.append(ch)
-        else
-          if Character.isLowerCase(lastChar) && Character.isUpperCase(ch) then
-            sb.append('_')
-            sb.append(ch.toLower)
-          else sb.append(ch)
-        lastChar = ch
-        i += 1
-
-      val newName = sb.toString
-      if (newName != name) Some(newName)
-      else None
-
-    def apply(rs: ResultSetWrapper): T =
-      if rs hasColumn name then
-        rs.get[T](name)
-      else if underscoreName.nonEmpty && rs.hasColumn(underscoreName.get) then
-        rs.get[T](underscoreName.get)
+class Camel2UnderscoreMapper extends CaseClassColumnMapper:
+  def columnName(field: String): String =
+    val sb = new StringBuilder
+    var i = 0
+    var lastChar: Char = 0
+    while i < field.length do
+      val ch = field.charAt(i)
+      if (i == 0) sb.append(ch)
       else
-        default match
-          case Some(m) => m
-          case None =>  // if this type is Option[X], return None
-            summon[JdbcValueAccessor[T]] match
-              case x: JdbcValueAccessor_Option[?] => None.asInstanceOf[T]
-              case _ => throw new RuntimeException(s"The ResultSet have no field $name but it is required")
+        if Character.isLowerCase(lastChar) && Character.isUpperCase(ch) then
+          sb.append('_')
+          sb.append(ch.toLower)
+        else sb.append(ch)
+      lastChar = ch
+      i += 1
+    sb.toString
+
+class IdentityMapping extends CaseClassColumnMapper:
+  def columnName(field: String): String = field
+
+class UseColumnMapper(value: Class[_ <: CaseClassColumnMapper]) extends StaticAnnotation
+
+/**
+ * the base class used in automate generated ResultSetMapper.
+ */
+def caseFieldGet[T: JdbcValueAccessor](name: String, default: Option[T], rs: ResultSetWrapper): T =
+  if rs hasColumn name then
+    rs.get[T](name)
+  else
+    default match
+      case Some(m) => m
+      case None =>
+        summon[JdbcValueAccessor[T]] match
+          case x: JdbcValueAccessor_Option[?] => None.asInstanceOf[T]
+          case _ => throw new RuntimeException(s"The ResultSet have no field $name but it is required")
 
 trait ConnectionOps:
   extension (conn: Connection)

@@ -6,7 +6,7 @@ import scala.collection.mutable.ListBuffer
 given ConnectionOps with
 
   import org.slf4j.{LoggerFactory, Logger}
-  val LOG: Logger = LoggerFactory.getLogger(getClass)
+  val LOG: Logger = LoggerFactory.getLogger("wsql")
 
   extension (conn: Connection)
 
