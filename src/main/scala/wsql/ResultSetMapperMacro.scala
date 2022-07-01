@@ -40,7 +40,7 @@ object ResultSetMapperMacro:
       names.zip(idents).toMap
 
     // '{ new CaseField[f.type](f.name, f.default)(using JdbcValueMapper[f.type])($rs) }
-    def rsGetField(rs: Expr[ResultSetWrapper], field: Symbol): Term =
+    def rsGetField(rsColumns: Expr[Set[String]], rs: Expr[ResultSet], field: Symbol): Term =
       val name = field.name
       val columnName = columnMapper.columnName(name)
 
@@ -51,7 +51,7 @@ object ResultSetMapperMacro:
               val defaultExpr: Expr[Option[t]] = defaultParams.get(name) match
                 case Some(deff) => '{ Some(${deff.asInstanceOf[Expr[t]]}) }
                 case None => '{ None }
-              '{ caseFieldGet[t](${Expr(columnName)}, ${defaultExpr}, $rs)(using $accessor) }
+              '{ caseFieldGet[t]($rsColumns, ${Expr(columnName)}, ${Expr(columnName.toUpperCase)},${defaultExpr}, $rs)(using $accessor) }
             case None =>
               report.error(s"No JdbcValueAccessor found, owner:${TypeTree.of[T].show} field:$name type:${TypeTree.of[t].show}")
               '{ ??? }
@@ -61,10 +61,11 @@ object ResultSetMapperMacro:
     // '{ new T( field1, field2, ... ) }
     def buildBeanFromRs(rs: Expr[ResultSet]): Expr[T] =
       val tpeSym = TypeTree.of[T].symbol
-      val _rsWrapper: Expr[ResultSetWrapper] = '{ new ResultSetWrapper($rs) }
+      val _rsColumns: Expr[Set[String]] = '{ getResultSetFieldNames($rs) }
+//      val _rsWrapper: Expr[ResultSetWrapper] = '{ new ResultSetWrapper($rs) }
 
-      ValDef.let( Symbol.spliceOwner, _rsWrapper.asTerm) { _rsRef =>
-        val terms: List[Term] = tpeSym.caseFields.map(field => rsGetField(_rsRef.asExpr.asInstanceOf[Expr[ResultSetWrapper]], field))
+      ValDef.let( Symbol.spliceOwner, _rsColumns.asTerm) { _rsColumnsRef =>
+        val terms: List[Term] = tpeSym.caseFields.map(field => rsGetField(_rsColumnsRef.asExpr.asInstanceOf[Expr[Set[String]]], rs, field))
         val constructor = TypeTree.of[T].symbol.primaryConstructor
         ValDef.let(Symbol.spliceOwner, terms) { refs =>
           Apply(Select(New(TypeTree.of[T]), constructor), refs)
@@ -75,5 +76,7 @@ object ResultSetMapperMacro:
       new ResultSetMapper[T]:
         def from(rs: ResultSet): T = ${buildBeanFromRs('{rs})}
     }
+
+//    println("expr: " + expr.show)
 
     expr
