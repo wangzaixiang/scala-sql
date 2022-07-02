@@ -182,7 +182,7 @@ class WsqlTest extends AnyFunSuite {
     val caught = intercept[Exception] {
       val rows = dataSource.rows[Test3]("select * from test1")
     }
-    println("caught: " + caught.getMessage)
+//    println("caught: " + caught.getMessage)
     assert(caught.getMessage contains """Column "small_int2" not found """)
   }
 

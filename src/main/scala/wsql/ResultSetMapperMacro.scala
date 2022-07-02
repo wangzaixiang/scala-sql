@@ -55,15 +55,30 @@ object ResultSetMapperMacro:
 
           Expr.summon[JdbcValueAccessor[t]] match
             case Some(accessor) =>
-              val (defaultExpr:Expr[Option[t]], none) = defaultParams.get(name) match
-                case Some(deff) => ('{ Some(${deff.asInstanceOf[Expr[t]]}) }, false)
-                case None => if isOption then ('{ Some(None.asInstanceOf[t]) }, false)  else ('{ None }, true)
+              Type.of[t] match
+                case '[Option[t2]] => // Option[Int] ->
+                  // t: Option[Int]
+                  // t2: Int
+                  // defaultExpr: Expr[Option[Int]]
+                  // withDefaultOption[Int](name, primitive, Some[Int], rs)
 
-              // TODO optimize option for inline
-              if none == true then
-                '{ withoutDefault[t](${Expr(columnName)}, $rs)(using $accessor) }
-              else
-                '{ withDefault[t](${Expr(columnName)}, ${Expr(primtive)}, ${defaultExpr}.asInstanceOf[Some[t]], $rs)(using $accessor) }
+                  val (defaultExpr: Expr[Option[t2]], none) = defaultParams.get(name) match
+                    case Some(deff) => ('{ ${deff}.asInstanceOf[Option[t2]] }, false)
+                    case None => ('{ None }, true)
+
+                  if none == true then
+                    '{ withoutDefaultOption[t2]( ${Expr(columnName)}, $rs)(${Expr.summon[JdbcValueAccessor[t2]].get}) }
+                  else
+                    '{ withDefaultOption[t2](${Expr(columnName)}, ${Expr(primtive)}, ${defaultExpr}.asInstanceOf[Some[t2]], $rs)(using ${Expr.summon[JdbcValueAccessor[t2]].get}) }
+                case _ =>
+                  val (defaultExpr:Expr[Option[t]], none) = defaultParams.get(name) match
+                    case Some(deff) => ('{ Some(${deff.asInstanceOf[Expr[t]]}) }, false)
+                    case None => if isOption then ('{ Some(None.asInstanceOf[t]) }, false)  else ('{ None }, true)
+
+                  if none == true then
+                    '{ withoutDefault[t](${Expr(columnName)}, $rs)(using $accessor) }
+                  else
+                    '{ withDefault[t](${Expr(columnName)}, ${Expr(primtive)}, ${defaultExpr}.asInstanceOf[Some[t]], $rs)(using $accessor) }
             case None =>
               report.error(s"No JdbcValueAccessor found, owner:${TypeTree.of[T].show} field:$name type:${TypeTree.of[t].show}")
               '{ ??? }
