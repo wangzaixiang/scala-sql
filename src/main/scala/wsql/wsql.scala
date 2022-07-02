@@ -298,7 +298,7 @@ private inline def withDefault[T:JdbcValueAccessor](inline name:String, inline p
 private inline def withoutDefault[T:JdbcValueAccessor](inline name: String, rs: ResultSet): T =
     rs.get[T](name)
 
-private inline def withDefaultOption[T:JdbcValueAccessor](inline name:String, inline primtive:Boolean, inline deff: Some[T], rs: ResultSet): Option[T] =
+private inline def withDefaultOption[T:JdbcValueAccessor](inline name:String, inline primtive:Boolean, inline deff: Option[T], rs: ResultSet): Option[T] =
   try
     val v = rs.get[T](name)
     inline if primtive then
@@ -307,17 +307,6 @@ private inline def withDefaultOption[T:JdbcValueAccessor](inline name:String, in
       if v == null then deff else Some(v)
   catch
     case ex: java.sql.SQLException => deff
-
-/**
- * TODO optimize Option[T]'s macro code
- */
-private inline def withoutDefaultOption[T](inline name: String, rs: ResultSet)(inline accessor: JdbcValueAccessor[T]): Option[T] =
-  try
-    if (rs.getObject(name) == null) None
-    else
-      Some(accessor.passOut(rs, name))
-  catch
-    case ex: java.sql.SQLException => None
 
 trait ConnectionOps:
   extension (conn: Connection)
