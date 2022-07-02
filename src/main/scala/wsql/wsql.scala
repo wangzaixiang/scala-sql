@@ -46,6 +46,7 @@ trait JdbcValueAccessor[T]:
 
 object JdbcValueAccessor:
   def apply[T](using v: JdbcValueAccessor[T]): JdbcValueAccessor[T] = v
+
   given [T: JdbcValueAccessor]: JdbcValueAccessor[Option[T]] with //new JdbcValueAccessor_Option[T]
     inline def passIn(stmt: PreparedStatement, index: Int, value: Option[T]): Unit = value match
       case Some(t) => summon[JdbcValueAccessor[T]].passIn(stmt, index, t)
@@ -250,12 +251,6 @@ extension (rs: ResultSet)
   inline def getOption[T: JdbcValueAccessor](index: Int): Option[T] =
     if (rs.getObject(index) == null) None else Some(summon[JdbcValueAccessor[T]].passOut(rs, index))
 
-def getResultSetFieldNames(rs: ResultSet): Set[String] = rs match
-  case row: Row => row.cells.map(_.name.toUpperCase()).toSet
-  case _ =>
-    val meta = rs.getMetaData
-    (for (i <- 1 to meta.getColumnCount) yield meta.getColumnLabel(i).toUpperCase()).toSet
-
 /**
  * currently, only classes supprt, dont support object yet.
  */
@@ -285,18 +280,31 @@ class IdentityMapping extends CaseClassColumnMapper:
 class UseColumnMapper(value: Class[_ <: CaseClassColumnMapper]) extends StaticAnnotation
 
 /**
- * the base class used in automate generated ResultSetMapper.
+ * inlined into ResultSetMapperMacro to access the field's value with Default
  */
-inline def caseFieldGet[T: JdbcValueAccessor](columns:Set[String], inline name: String, inline nameU: String, inline default: Option[T], rs: ResultSet): T =
-  if columns contains nameU then
+private inline def withDefault[T:JdbcValueAccessor](inline name:String, inline primtive:Boolean, inline deff: Some[T], rs: ResultSet): T =
+  try
+    val v = rs.get[T](name)
+    inline if primtive then
+        if rs.wasNull then deff.value else v
+    else
+        if v == null then deff.value else v
+  catch
+    case ex: java.sql.SQLException => deff.value
+
+/**
+ * inlined into ResultSetMapperMacro to access the field's value without Default
+ */
+private inline def withoutDefault[T:JdbcValueAccessor](inline name: String, rs: ResultSet): T =
     rs.get[T](name)
+
+/**
+ * TODO optimize Option[T]'s macro code
+ */
+private inline def withoutDefaultOption[T](inline name: String, rs: ResultSet)(inline accessor: JdbcValueAccessor[T]): Option[T] =
+  if (rs.getObject(name) == null) None
   else
-    inline default match
-      case Some(m) => m
-      case None =>
-        inline summon[JdbcValueAccessor[T]] match
-          case x: JdbcValueAccessor[Option[?]] => None.asInstanceOf[T]
-          case _ => throw new RuntimeException(s"The ResultSet have no field $name but it is required")
+    Some(accessor.passOut(rs, name))
 
 trait ConnectionOps:
   extension (conn: Connection)

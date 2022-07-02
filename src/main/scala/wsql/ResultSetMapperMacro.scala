@@ -39,19 +39,31 @@ object ResultSetMapperMacro:
 
       names.zip(idents).toMap
 
+    def isPrimitive(tpe: TypeRepr): Boolean =
+      val anyVal = TypeRepr.of[AnyVal]
+      tpe <:< anyVal
+
     // '{ new CaseField[f.type](f.name, f.default)(using JdbcValueMapper[f.type])($rs) }
-    def rsGetField(rsColumns: Expr[Set[String]], rs: Expr[ResultSet], field: Symbol): Term =
+    def rsGetField(rs: Expr[ResultSet], field: Symbol): Term =
       val name = field.name
       val columnName = columnMapper.columnName(name)
 
       val expr = field.tree.asInstanceOf[ValDef].tpt.tpe.asType match {
         case '[t] =>
+          val primtive = isPrimitive(TypeRepr.of[t])
+          val isOption = TypeRepr.of[t].widen <:< TypeRepr.of[Option[Any]]
+
           Expr.summon[JdbcValueAccessor[t]] match
             case Some(accessor) =>
-              val defaultExpr: Expr[Option[t]] = defaultParams.get(name) match
-                case Some(deff) => '{ Some(${deff.asInstanceOf[Expr[t]]}) }
-                case None => '{ None }
-              '{ caseFieldGet[t]($rsColumns, ${Expr(columnName)}, ${Expr(columnName.toUpperCase)},${defaultExpr}, $rs)(using $accessor) }
+              val (defaultExpr:Expr[Option[t]], none) = defaultParams.get(name) match
+                case Some(deff) => ('{ Some(${deff.asInstanceOf[Expr[t]]}) }, false)
+                case None => if isOption then ('{ Some(None.asInstanceOf[t]) }, false)  else ('{ None }, true)
+
+              // TODO optimize option for inline
+              if none == true then
+                '{ withoutDefault[t](${Expr(columnName)}, $rs)(using $accessor) }
+              else
+                '{ withDefault[t](${Expr(columnName)}, ${Expr(primtive)}, ${defaultExpr}.asInstanceOf[Some[t]], $rs)(using $accessor) }
             case None =>
               report.error(s"No JdbcValueAccessor found, owner:${TypeTree.of[T].show} field:$name type:${TypeTree.of[t].show}")
               '{ ??? }
@@ -61,15 +73,11 @@ object ResultSetMapperMacro:
     // '{ new T( field1, field2, ... ) }
     def buildBeanFromRs(rs: Expr[ResultSet]): Expr[T] =
       val tpeSym = TypeTree.of[T].symbol
-      val _rsColumns: Expr[Set[String]] = '{ getResultSetFieldNames($rs) }
-//      val _rsWrapper: Expr[ResultSetWrapper] = '{ new ResultSetWrapper($rs) }
 
-      ValDef.let( Symbol.spliceOwner, _rsColumns.asTerm) { _rsColumnsRef =>
-        val terms: List[Term] = tpeSym.caseFields.map(field => rsGetField(_rsColumnsRef.asExpr.asInstanceOf[Expr[Set[String]]], rs, field))
-        val constructor = TypeTree.of[T].symbol.primaryConstructor
-        ValDef.let(Symbol.spliceOwner, terms) { refs =>
-          Apply(Select(New(TypeTree.of[T]), constructor), refs)
-        }
+      val terms: List[Term] = tpeSym.caseFields.map(field => rsGetField(rs, field))
+      val constructor = TypeTree.of[T].symbol.primaryConstructor
+      ValDef.let(Symbol.spliceOwner, terms) { refs =>
+        Apply(Select(New(TypeTree.of[T]), constructor), refs)
       }.asExpr.asInstanceOf[Expr[T]]
 
     val expr = '{

@@ -1,7 +1,9 @@
 package wsql_test
 
 import org.scalatest.funsuite.AnyFunSuite
-import wsql.{given, *}
+import wsql.{*, given}
+
+import java.sql.SQLException
 
 class WsqlTest extends AnyFunSuite {
 
@@ -177,10 +179,11 @@ class WsqlTest extends AnyFunSuite {
                       small_int2: Short // missed field
                     ) derives ResultSetMapper
 
-    val caught = intercept[RuntimeException] {
+    val caught = intercept[Exception] {
       val rows = dataSource.rows[Test3]("select * from test1")
     }
-    assert(caught.getMessage contains "no field small_int2")
+    println("caught: " + caught.getMessage)
+    assert(caught.getMessage contains """Column "small_int2" not found """)
   }
 
 }
