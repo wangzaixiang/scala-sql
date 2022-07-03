@@ -24,7 +24,7 @@ object BeanBuilder {
   /**
    * if you need convert from A[X] => B[Y], you need import BeanBuilder.CollectionConverts.given
    */
-  object CollectionConverts:
+  object CollectionConverters:
     given [T]: Conversion[ Seq[T], List[T] ] with
       def apply(src: Seq[T]): List[T] = src.toList
 

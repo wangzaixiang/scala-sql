@@ -25,10 +25,14 @@ object Macros {
   def createMysqlBatchImpl[T: Type](proc: Expr[T=>SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
     '{ null }
 
+
   // tryBuild[ String, Int ]
   // TODO process self-reference
   private def tryBuildExpr[f: Type, t:Type](src: Expr[f])(using Quotes): Option[Expr[t]] =
     import quotes.reflect.*
+
+    def isOption[a:Type]: Boolean =
+      TypeRepr.of[a] <:< TypeRepr.of[Option[?]]
 
     def directConvert: Option[Expr[t]] =
       if TypeRepr.of[f] <:< TypeRepr.of[t] then Some(src.asInstanceOf[Expr[t]])
@@ -55,6 +59,7 @@ object Macros {
                 case _ => None
 
         case _ => None
+
     // X[a] => Y[b]
     def mapContainerAndElement: Option[Expr[t]] =
       (TypeRepr.of[f].widen, TypeRepr.of[t].widen) match
@@ -77,6 +82,32 @@ object Macros {
 
         case _ => None
 
+    def toOption: Option[Expr[t]] =
+      val isPrimitive = TypeRepr.of[f] <:< TypeRepr.of[AnyVal]
+      if !isOption[f] && isOption[t] then
+        TypeRepr.of[t].widen match
+          case AppliedType(t_base, t_args) =>
+            t_args(0).asType match
+              case '[t2] =>
+                tryBuildExpr[f, t2](src).map ( conv =>
+                  if(isPrimitive)
+                    '{ Option($conv).asInstanceOf[t] }
+                  else
+                    '{ (if($src == null) None else Option($conv)).asInstanceOf[t] }
+                )
+      else None
+
+    def unapplyOption: Option[Expr[t]] =
+      if( isOption[f] && !isOption[t]) then
+        TypeRepr.of[f].widen match
+          case AppliedType(f_base, f_args) =>
+            f_args(0).asType match
+              case '[f2] =>
+                tryBuildFunc[f2,t].map( conv =>
+                    '{ $src.asInstanceOf[Option[f2]].map($conv).getOrElse(null.asInstanceOf[t]) }
+                )
+      else None
+
     def caseClassConvert: Option[Expr[t]] =
       if( TypeRepr.of[f].widen.typeSymbol.flags.is(Flags.Case) && TypeRepr.of[t].widen.typeSymbol.flags.is(Flags.Case) ) then
         val args = '{ Seq($src) }
@@ -85,6 +116,8 @@ object Macros {
 
     directConvert
       .orElse(implicitConversion)
+      .orElse(toOption)
+      .orElse(unapplyOption)
       .orElse(mapElement)
       .orElse(mapContainerAndElement)
       .orElse(caseClassConvert)
@@ -175,6 +208,8 @@ object Macros {
     val block = ValDef.let( Symbol.spliceOwner, fieldExprs  ) { refs =>
       Apply( Select( New(TypeTree.of[T]), constructor), refs)
     }.asExpr.asInstanceOf[Expr[T]]
+
+//    dump(block)
 
     block
 

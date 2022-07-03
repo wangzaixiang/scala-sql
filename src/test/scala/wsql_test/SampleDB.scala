@@ -23,7 +23,6 @@ object SampleDB {
 
   private def prepareDB(dataSource: DataSource): Unit = {
 
-    println("during setUp")
     dataSource.executeUpdate(
       sql"""
        drop table if exists users;

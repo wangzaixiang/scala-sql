@@ -1,10 +1,10 @@
 <configuration>
 
-    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
-        <encoder>
-            <pattern>%-5level %logger{0} - %msg %n</pattern>
-        </encoder>
-    </appender>
+<!--    <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">-->
+<!--        <encoder>-->
+<!--            <pattern>%-5level %logger{0} - %msg %n</pattern>-->
+<!--        </encoder>-->
+<!--    </appender>-->
 
     <appender name="MemBuffer" class="wsql_test.MemoryAppender">
         <encoder>
@@ -13,7 +13,7 @@
     </appender>
 
     <root level="DEBUG">
-        <appender-ref ref="STDOUT"/>
+<!--        <appender-ref ref="STDOUT"/>-->
         <appender-ref ref="MemBuffer"/>
     </root>
 </configuration>
