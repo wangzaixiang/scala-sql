@@ -11,7 +11,7 @@ object ResultSetMapperMacro:
   def resultSetMapperImpl[T: Type](using Quotes): Expr[ResultSetMapper[T]] =
     import quotes.reflect.*
 
-    // extract @ColumnMapper(classOf[T]) if exists
+    // extract @UseColumnMapper(classOf[T]) if exists
     val columnMapper: CaseClassColumnMapper =
       val classSymbol = TypeTree.of[T].symbol
       val columnMapperSymbol = TypeTree.of[UseColumnMapper].symbol
@@ -54,7 +54,7 @@ object ResultSetMapperMacro:
             case Some(accessor) =>
               Type.of[t] match
                 case '[Option[t2]] => // Option[Int] ->
-                  val a = defaultParams.get(name) //
+//                  val a = defaultParams.get(name) //
                   val primitive = isPrimitive(TypeRepr.of[t2])
                   val defaultExpr: Expr[Option[t2]] = defaultParams.get(name) match  // Option(Expr[Option[t2]])
                     case Some(deff) =>  '{ ${deff}.asInstanceOf[Option[t2]] } // deff maybe Expr[None] also
