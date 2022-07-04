@@ -82,6 +82,7 @@ object Macros {
 
         case _ => None
 
+    // A => Option[B]
     def toOption: Option[Expr[t]] =
       val isPrimitive = TypeRepr.of[f] <:< TypeRepr.of[AnyVal]
       if !isOption[f] && isOption[t] then
@@ -97,13 +98,14 @@ object Macros {
                 )
       else None
 
+    // Option[A] => B
     def unapplyOption: Option[Expr[t]] =
       if( isOption[f] && !isOption[t]) then
         TypeRepr.of[f].widen match
           case AppliedType(f_base, f_args) =>
             f_args(0).asType match
               case '[f2] =>
-                tryBuildFunc[f2,t].map( conv =>
+                tryBuildFunc[f2,t].map( conv => // TODO primitive type
                     '{ $src.asInstanceOf[Option[f2]].map($conv).getOrElse(null.asInstanceOf[t]) }
                 )
       else None
@@ -135,6 +137,7 @@ object Macros {
       case Inlined(_, Nil, Apply( TypeApply( Select(seq, "apply"), _), List(Typed(Repeated(terms, _), _)))) => terms
       case _ => Nil
 
+  // TODO self-type reference
   def buildCaseClassImpl[T:Type](sources: Expr[Seq[AnyRef]])(additions: Expr[Seq[(String, Any)]])(using Quotes): Expr[T] =
     import quotes.reflect.*
 
@@ -183,7 +186,7 @@ object Macros {
             Select.unique(term, name).asExpr.asInstanceOf[Expr[Any]]
         } match {
           case Nil => None
-          case x :: Nil =>
+          case x :: Nil => // TODO exist field but type not matched, prompt error
             (x.asTerm.tpe.asType, field.tree.asInstanceOf[ValDef].tpt.tpe.asType) match
               case ('[f], '[t]) =>
                 tryBuildExpr[f, t](x.asInstanceOf[Expr[f]])
