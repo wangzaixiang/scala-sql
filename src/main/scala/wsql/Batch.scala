@@ -1,7 +1,6 @@
 package wsql
 
-import java.sql.{Connection, SQLType, Types}
-
+import java.sql.{Connection, PreparedStatement, SQLType, Types}
 import scala.language.experimental.macros
 
 trait Batch[T] {
@@ -17,14 +16,14 @@ trait Batch[T] {
 }
 
 
-case class BatchImpl[T](conn: Connection, statement: String ) ( proc: T => List[JdbcValue[?]] ) extends Batch[T] {
+case class BatchImpl[T](conn: Connection, statement: String ) ( proc: T => List[JdbcValue[?]|Null] ) extends Batch[T] {
 
-  val stmt = conn.prepareStatement(statement)
+  val stmt: PreparedStatement = conn.prepareStatement(statement).nn
 
   var toBeCommit = 0
 
   def addBatch(value: T): Unit = {
-    val args: Seq[JdbcValue[?]] = proc(value)
+    val args: Seq[JdbcValue[?]|Null] = proc(value)
     var idx = 1
 
     while( idx <= args.size ){

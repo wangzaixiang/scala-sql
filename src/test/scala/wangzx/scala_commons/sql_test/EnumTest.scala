@@ -63,7 +63,7 @@ object EnumTest {
   implicit def torderStatus2OrderStatus(obj: TOrderStatus): OrderStatus = OrderStatus.valueOf(obj.id)
 
   def main(args: Array[String]): Unit = {
-    val dataSource: DataSource = null
+    val dataSource: DataSource = ???
 
     val orderStatus: OrderStatus = OrderStatus.NEW
 
@@ -78,7 +78,7 @@ object EnumTest {
     // SomeEnum1.unapply[T](value)
 
     // val status2 = orderStatus.copyTo[TOrderStatus]
-    val order: Order = null
+    val order: Order = ???
 //    val torder:TOrder = BeanBuilder.build[TOrder](order)() // require Int=>TOrderStatus
 
 //    val order2 = BeanBuilder.build[Order](torder)()

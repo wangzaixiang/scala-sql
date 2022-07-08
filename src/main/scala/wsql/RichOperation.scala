@@ -6,12 +6,12 @@ import scala.collection.mutable.ListBuffer
 given ConnectionOps with
 
   import org.slf4j.{LoggerFactory, Logger}
-  val LOG: Logger = LoggerFactory.getLogger("wsql")
+  val LOG: Logger = LoggerFactory.getLogger("wsql").nn
 
   extension (conn: Connection)
 
     def withStatement[T](f: Statement => T): T =
-      val stmt = conn.createStatement
+      val stmt = conn.createStatement.nn
       try {
         f(stmt)
       } finally {
@@ -20,7 +20,7 @@ given ConnectionOps with
 
 
     private def withPreparedStatement[T](sql: String)(f: PreparedStatement => T): T =
-      val stmt = conn.prepareStatement(sql)
+      val stmt = conn.prepareStatement(sql).nn
       try {
         f(stmt)
       } finally {
@@ -50,28 +50,29 @@ given ConnectionOps with
     inline def createMysqlBatch[T](proc: T => SQLWithArgs): Batch[T] =
       ${ Macros.createMysqlBatchImpl[T]('proc, 'conn) }
 
-    def executeUpdate(stmt: SQLWithArgs): Int = executeUpdateWithGenerateKey(stmt)(null)
+    def executeUpdate(stmt: SQLWithArgs): Int = executeUpdateWithGenerateKey(stmt)(rs=>())
 
-    @inline private def setStatementArgs(stmt: PreparedStatement, args: Seq[JdbcValue[_]]) =
+    @inline private def setStatementArgs(stmt: PreparedStatement, args: Seq[JdbcValue[_]|Null]) =
       args.zipWithIndex.foreach {
-        case (null, idx) => stmt.setNull(idx + 1, Types.VARCHAR)
-        case (v, idx) => v.passIn(stmt, idx + 1)
+        case (v, idx) =>
+          if(v == null) stmt.setNull(idx + 1, Types.VARCHAR) else v.passIn(stmt, idx + 1)
       }
 
-    def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(processGenerateKeys: ResultSet => Unit = null): Int =
+    // TODO provide a NOOP operation
+    def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(processGenerateKeys: ResultSet => Unit): Int =
       val prepared = conn.prepareStatement(stmt.sql,
-        if (processGenerateKeys != null) Statement.RETURN_GENERATED_KEYS
-        else Statement.NO_GENERATED_KEYS)
+        if(processGenerateKeys != NoopProcessor) Statement.RETURN_GENERATED_KEYS
+        else Statement.NO_GENERATED_KEYS ).nn
 
       try {
-        if (stmt.args != null) setStatementArgs(prepared, stmt.args)
+        setStatementArgs(prepared, stmt.args)
 
         LOG.debug("SQL Preparing: {} args: {}", Seq(stmt.sql, stmt.args): _*)
 
-        val result = prepared.executeUpdate()
+        val result = prepared.executeUpdate().nn
 
-        if (processGenerateKeys != null) {
-          val keys = prepared.getGeneratedKeys
+        if(processGenerateKeys != NoopProcessor) {
+          val keys = prepared.getGeneratedKeys.nn
           processGenerateKeys(keys)
         }
 
@@ -86,8 +87,10 @@ given ConnectionOps with
       var t: Option[T] = None
 
       executeUpdateWithGenerateKey(stmt) { rs =>
-        if (rs.next)
-          t = Some(implicitly[JdbcValueAccessor[T]].passOut(rs, 1))
+        if (rs.next) {
+          val x = implicitly[JdbcValueAccessor[T]].passOut(rs, 1)
+          Option(x.asInstanceOf[AnyRef]).asInstanceOf[Option[T]]
+        }
       }
 
       assert(t.isDefined, s"the sql doesn't return a generated key but expected")
@@ -95,12 +98,12 @@ given ConnectionOps with
 
 
     def eachRow[T: ResultSetMapper](sql: SQLWithArgs)(f: T => Unit): Unit = withPreparedStatement(sql.sql) { prepared =>
-      if (sql.args != null) setStatementArgs(prepared, sql.args)
+      setStatementArgs(prepared, sql.args)
 
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val mapper = implicitly[ResultSetMapper[T]]
-      val rs = prepared.executeQuery()
+      val rs = prepared.executeQuery().nn
       // val rsMeta = rs.getMetaData
       var rowCount = 0
       while (rs.next()) {
@@ -113,11 +116,11 @@ given ConnectionOps with
 
     def rows[T: ResultSetMapper](sql: SQLWithArgs): List[T] = withPreparedStatement(sql.sql) { prepared =>
       val buffer = new ListBuffer[T]()
-      if (sql.args != null) setStatementArgs(prepared, sql.args)
+      setStatementArgs(prepared, sql.args)
 
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
-      val rs = prepared.executeQuery()
+      val rs = prepared.executeQuery().nn
       // val rsMeta = rs.getMetaData
       while (rs.next()) {
         val mapped = implicitly[ResultSetMapper[T]].from(rs)
@@ -130,11 +133,11 @@ given ConnectionOps with
 
     def joinRows2[T1: ResultSetMapper, T2: ResultSetMapper](sql: SQLWithArgs): List[(T1, T2)] = withPreparedStatement(sql.sql) { prepared =>
       val buffer = new ListBuffer[(T1, T2)]()
-      if (sql.args != null) setStatementArgs(prepared, sql.args)
+      setStatementArgs(prepared, sql.args)
 
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
-      val rs = prepared.executeQuery()
+      val rs = prepared.executeQuery().nn
       // val rsMeta = rs.getMetaData
       while (rs.next()) {
         val t1: T1 = implicitly[ResultSetMapper[T1]].from(rs)
@@ -149,11 +152,11 @@ given ConnectionOps with
 
     def joinRows3[T1: ResultSetMapper, T2: ResultSetMapper, T3: ResultSetMapper](sql: SQLWithArgs): List[(T1, T2, T3)] = withPreparedStatement(sql.sql) { prepared =>
       val buffer = new ListBuffer[(T1, T2, T3)]()
-      if (sql.args != null) setStatementArgs(prepared, sql.args)
+      setStatementArgs(prepared, sql.args)
 
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
-      val rs = prepared.executeQuery()
+      val rs = prepared.executeQuery().nn
       // val rsMeta = rs.getMetaData
       while (rs.next()) {
         val t1: T1 = implicitly[ResultSetMapper[T1]].from(rs)
@@ -169,11 +172,11 @@ given ConnectionOps with
 
     def joinRows4[T1: ResultSetMapper, T2: ResultSetMapper, T3: ResultSetMapper, T4: ResultSetMapper](sql: SQLWithArgs): List[(T1, T2, T3, T4)] = withPreparedStatement(sql.sql) { prepared =>
       val buffer = new ListBuffer[(T1, T2, T3, T4)]()
-      if (sql.args != null) setStatementArgs(prepared, sql.args)
+      setStatementArgs(prepared, sql.args)
 
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
-      val rs = prepared.executeQuery()
+      val rs = prepared.executeQuery().nn
       // val rsMeta = rs.getMetaData
       while (rs.next()) {
         val t1: T1 = implicitly[ResultSetMapper[T1]].from(rs)
@@ -189,11 +192,11 @@ given ConnectionOps with
     }
 
     def row[T: ResultSetMapper](sql: SQLWithArgs): Option[T] = withPreparedStatement(sql.sql) { prepared =>
-      if (sql.args != null) setStatementArgs(prepared, sql.args)
+      setStatementArgs(prepared, sql.args)
 
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
-      val rs = prepared.executeQuery()
+      val rs = prepared.executeQuery().nn
 
       var result: Option[T] = None
 
@@ -211,11 +214,11 @@ given ConnectionOps with
     }
 
     def joinRow2[T1: ResultSetMapper, T2: ResultSetMapper](sql: SQLWithArgs): Option[(T1, T2)] = withPreparedStatement(sql.sql) { prepared =>
-      if (sql.args != null) setStatementArgs(prepared, sql.args)
+      setStatementArgs(prepared, sql.args)
 
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
-      val rs = prepared.executeQuery()
+      val rs = prepared.executeQuery().nn
 
       var result: Option[(T1, T2)] = None
 
@@ -235,11 +238,11 @@ given ConnectionOps with
     }
 
     def joinRow3[T1: ResultSetMapper, T2: ResultSetMapper, T3: ResultSetMapper](sql: SQLWithArgs): Option[(T1, T2, T3)] = withPreparedStatement(sql.sql) { prepared =>
-      if (sql.args != null) setStatementArgs(prepared, sql.args)
+      setStatementArgs(prepared, sql.args)
 
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
-      val rs = prepared.executeQuery()
+      val rs = prepared.executeQuery().nn
 
       var result: Option[(T1, T2, T3)] = None
 
@@ -260,11 +263,11 @@ given ConnectionOps with
     }
 
     def joinRow4[T1: ResultSetMapper, T2: ResultSetMapper, T3: ResultSetMapper, T4: ResultSetMapper](sql: SQLWithArgs): Option[(T1, T2, T3, T4)] = withPreparedStatement(sql.sql) { prepared =>
-      if (sql.args != null) setStatementArgs(prepared, sql.args)
+      setStatementArgs(prepared, sql.args)
 
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
-      val rs = prepared.executeQuery()
+      val rs = prepared.executeQuery().nn
 
       var result: Option[(T1, T2, T3, T4)] = None
 
@@ -287,11 +290,11 @@ given ConnectionOps with
 
     def queryInt(sql: SQLWithArgs): Int = withPreparedStatement(sql.sql) { prepared =>
       //    val prepared = conn.prepareStatement(sql.sql)
-      if (sql.args != null) setStatementArgs(prepared, sql.args)
+      setStatementArgs(prepared, sql.args)
 
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
-      val rs = prepared.executeQuery()
+      val rs = prepared.executeQuery().nn
 
       if (rs.next) {
         rs.getInt(1)
@@ -302,7 +305,7 @@ given DataSourceOps with
 
   extension (datasource: javax.sql.DataSource)
     private def withConnection[T](f: Connection => T): T =
-      val conn = datasource.getConnection
+      val conn = datasource.getConnection.nn
       try {
         f(conn)
       } finally {
@@ -320,9 +323,9 @@ given DataSourceOps with
       withConnection(conn => conn.createMysqlBatch(proc))
 
     def executeUpdate(stmt: SQLWithArgs): Int =
-      executeUpdateWithGenerateKey(stmt)(null)
+      executeUpdateWithGenerateKey(stmt)(NoopProcessor)
 
-    def executeUpdateWithGenerateKey(sql: SQLWithArgs)(processGenerateKeys: ResultSet => Unit = null): Int =
+    def executeUpdateWithGenerateKey(sql: SQLWithArgs)(processGenerateKeys: ResultSet => Unit = NoopProcessor): Int =
       withConnection(_.executeUpdateWithGenerateKey(sql)(processGenerateKeys))
 
     def generateKey[T: JdbcValueAccessor](sql: SQLWithArgs): T =

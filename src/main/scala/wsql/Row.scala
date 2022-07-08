@@ -19,7 +19,7 @@ object Row {
 
   sealed abstract class Cell[T](val name: String, val sqltype: Int, val value: T) {
     inline def ??? = throw new UnsupportedOperationException
-    def getString: String = if (value == null) null else value.toString
+    def getString: String|Null = if (value == null) null else value.toString
     def getLong: Long  = ???
     def getInt: Int = getLong.toInt
     def getByte: Byte = getLong.toByte
@@ -27,20 +27,22 @@ object Row {
     def getDouble: Double = getLong.toDouble
     def getFloat: Float = getDouble.toFloat
     def getBoolean: Boolean = getLong != 0
-    def getBigDecimal: JBigDecimal = new JBigDecimal(getLong)
-    def getScalaBigDecimal = BigDecimal(getBigDecimal)
+    def getBigDecimal: JBigDecimal|Null = new JBigDecimal(getLong)
+    def getScalaBigDecimal: BigDecimal|Null = getBigDecimal match
+      case null => null
+      case x: JBigDecimal => BigDecimal(x)
 
-    def getDate: java.sql.Date = ???
-    def getTime: java.sql.Time = ???
-    def getTimestamp: java.sql.Timestamp = ???
-    def getBytes: Array[Byte] = {
+    def getDate: java.sql.Date|Null = ???
+    def getTime: java.sql.Time|Null = ???
+    def getTimestamp: java.sql.Timestamp|Null = ???
+    def getBytes: Array[Byte]|Null = {
       val string = getString
       if (string == null) null
       else string.getBytes
     }
-    def getAsciiStream: InputStream = ???
-    def getBinaryStream: InputStream = ???
-    def getObject: AnyRef = value.asInstanceOf[AnyRef]
+    def getAsciiStream: InputStream|Null = ???
+    def getBinaryStream: InputStream|Null = ???
+    def getObject: AnyRef|Null = value.asInstanceOf[AnyRef]
 
     override def toString = s"$name:$value"
   }
@@ -68,32 +70,32 @@ object Row {
     override def getLong = value.toLong
     override def getDouble = value
   }
-  class StringCell(name:String, sqltype: Int, value: String) extends Cell(name, sqltype, value) {
+  class StringCell(name:String, sqltype: Int, value: String|Null) extends Cell(name, sqltype, value) {
     override def getLong = if (value == null) 0 else value.toLong
     override def getDouble = if (value == null) 0 else value.toDouble
     override def getBigDecimal = if (value == null) null else new JBigDecimal(value)
   }
-  class BigDecimalCell(name:String, sqltype:Int, value: JBigDecimal) extends Cell(name, sqltype, value){
-    override def getLong = if (value == null) 0 else value.longValue
-    override def getDouble = if (value == null) 0 else value.doubleValue
+  class BigDecimalCell(name:String, sqltype:Int, value: JBigDecimal|Null) extends Cell(name, sqltype, value){
+    override def getLong = if(value == null) 0L  else value.longValue
+    override def getDouble = if(value == null) 0d else value.doubleValue
     override def getBigDecimal = value
   }
-  class DateCell(name:String, sqltype:Int, value: java.sql.Date) extends Cell(name, sqltype, value) {
+  class DateCell(name:String, sqltype:Int, value: java.sql.Date|Null) extends Cell(name, sqltype, value) {
     override def getDate = value
-    override def getTime = if (value == null) null else new Time(value.getTime)
-    override def getTimestamp = if (value == null) null else new Timestamp(value.getTime)
+    override def getTime = if (value == null) null else new Time(value.getTime.nn)
+    override def getTimestamp = if (value == null) null else new Timestamp(value.getTime.nn)
   }
-  class TimeCell(name:String, sqltype: Int, value: java.sql.Time) extends Cell(name, sqltype, value) {
+  class TimeCell(name:String, sqltype: Int, value: java.sql.Time|Null) extends Cell(name, sqltype, value) {
     override def getTime = value
     override def getDate = if (value == null) null else new Date(value.getTime)
     override def getTimestamp = if (value == null) null else new Timestamp(value.getTime)
   }
-  class TimestampCell(name:String, sqltype: Int, value: java.sql.Timestamp) extends Cell(name, sqltype, value){
+  class TimestampCell(name:String, sqltype: Int, value: java.sql.Timestamp|Null) extends Cell(name, sqltype, value){
     override def getTimestamp = value
     override def getDate = if (value == null) null else new Date(value.getTime)
     override def getTime = if (value == null) null else new Time(value.getTime)
   }
-  class BytesCell(name:String, sqltype: Int, value: Array[Byte]) extends Cell(name, sqltype, value) {
+  class BytesCell(name:String, sqltype: Int, value: Array[Byte]|Null) extends Cell(name, sqltype, value) {
     override def getString = if (value == null) null else new String(value)
     override def getBytes = value
   }
@@ -113,7 +115,7 @@ object Row {
   def resultSetToRow(meta: ResultSetMetaData, rs: ResultSet): Row = {
     val cells: Seq[Cell[_]] = {
       for (i <- 1 to meta.getColumnCount) yield {
-        val name = meta.getColumnLabel(i)
+        val name = meta.getColumnLabel(i).nn
         val sqltype = meta.getColumnType(i)
         val isnull = rs.getObject(i) == null
 
@@ -138,7 +140,7 @@ object Row {
   }
 
   given resultSetMapper: ResultSetMapper[Row] with
-    override def from(rs: ResultSet): Row = resultSetToRow(rs.getMetaData, rs)
+    override def from(rs: ResultSet): Row = resultSetToRow(rs.getMetaData.nn, rs)
   
 }
 
@@ -147,16 +149,16 @@ class Row(val cells: Seq[Row.Cell[_]]) extends ResultSet {
   import Row._
 
   private lazy val cellsByName: Map[String, Cell[_]] = cells.map { cell =>
-    (cell.name.toLowerCase, cell)
+    (cell.name.toLowerCase.nn, cell)
   }.toMap
 
   override def toString = cells.map(_.toString).mkString("Row(", ",", ")")
 
   @inline def cell(index:Int) = cells(index-1)
-  @inline def cell(key: String) = cellsByName(key.toLowerCase)
+  @inline def cell(key: String) = cellsByName(key.toLowerCase.nn)
 
-  def getString(index: Int): String = cell(index).getString
-  def getString(key: String): String = cell(key).getString
+  def getString(index: Int): String|Null = cell(index).getString
+  def getString(key: String): String|Null = cell(key).getString
 
   def getByte(index: Int): Byte = cell(index).getByte
   def getByte(key: String): Byte = cell(key).getByte
@@ -179,32 +181,32 @@ class Row(val cells: Seq[Row.Cell[_]]) extends ResultSet {
   def getBoolean(index: Int): Boolean = cell(index).getBoolean
   def getBoolean(key: String): Boolean = cell(key).getBoolean
 
-  def getBigDecimal(index: Int): java.math.BigDecimal = cell(index).getBigDecimal
-  def getBigDecimal(key: String): java.math.BigDecimal = cell(key).getBigDecimal
+  def getBigDecimal(index: Int): java.math.BigDecimal|Null = cell(index).getBigDecimal
+  def getBigDecimal(key: String): java.math.BigDecimal|Null = cell(key).getBigDecimal
 
-  def getScalaBigDecimal(index: Int): BigDecimal = cell(index).getScalaBigDecimal
-  def getScalaBigDecimal(key: String): BigDecimal = cell(key).getScalaBigDecimal
+  def getScalaBigDecimal(index: Int): BigDecimal|Null = cell(index).getScalaBigDecimal
+  def getScalaBigDecimal(key: String): BigDecimal|Null = cell(key).getScalaBigDecimal
 
-  def getDate(index: Int): java.sql.Date = cell(index).getDate
-  def getDate(key: String): java.sql.Date = cell(key).getDate
+  def getDate(index: Int): java.sql.Date|Null = cell(index).getDate
+  def getDate(key: String): java.sql.Date|Null = cell(key).getDate
 
-  def getTime(index: Int): java.sql.Time = cell(index).getTime
-  def getTime(key: String): java.sql.Time = cell(key).getTime
+  def getTime(index: Int): java.sql.Time|Null = cell(index).getTime
+  def getTime(key: String): java.sql.Time|Null = cell(key).getTime
 
-  def getTimestamp(index: Int): java.sql.Timestamp = cell(index).getTimestamp
-  def getTimestamp(key: String): java.sql.Timestamp = cell(key).getTimestamp
+  def getTimestamp(index: Int): java.sql.Timestamp|Null = cell(index).getTimestamp
+  def getTimestamp(key: String): java.sql.Timestamp|Null = cell(key).getTimestamp
 
-  def getBytes(index: Int): Array[Byte] = cell(index).getBytes
-  def getBytes(key: String): Array[Byte] = cell(key).getBytes
+  def getBytes(index: Int): Array[Byte]|Null = cell(index).getBytes
+  def getBytes(key: String): Array[Byte]|Null = cell(key).getBytes
 
-  def getAsciiStream(index: Int): InputStream = cell(index).getAsciiStream
-  def getAsciiStream(key: String): InputStream = cell(key).getAsciiStream
+  def getAsciiStream(index: Int): InputStream|Null = cell(index).getAsciiStream
+  def getAsciiStream(key: String): InputStream|Null = cell(key).getAsciiStream
 
-  def getBinaryStream(index: Int): InputStream = cell(index).getBinaryStream
-  def getBinaryStream(key: String): InputStream = cell(key).getBinaryStream
+  def getBinaryStream(index: Int): InputStream|Null = cell(index).getBinaryStream
+  def getBinaryStream(key: String): InputStream|Null = cell(key).getBinaryStream
 
-  def getObject(index: Int): AnyRef = cell(index).getObject
-  def getObject(key: String): AnyRef = cell(key).getObject
+  def getObject(index: Int): AnyRef|Null = cell(index).getObject
+  def getObject(key: String): AnyRef|Null = cell(key).getObject
 
   def get[T: JdbcValueAccessor](index: Int): T = summon[JdbcValueAccessor[T]].passOut(this, index)
   def get[T: JdbcValueAccessor](key: String): T = summon[JdbcValueAccessor[T]].passOut(this, key)

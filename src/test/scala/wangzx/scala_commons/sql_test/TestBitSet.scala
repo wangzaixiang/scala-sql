@@ -21,7 +21,7 @@ object TestBitSet {
 
     println(MySqlBitSet.jdbcValueAccessor.fromByteArray(Array(10)))
 
-    val conn = DriverManager.getConnection("jdbc:mysql://127.0.0.1:3307/test1", "root", "root")
+    val conn = DriverManager.getConnection("jdbc:mysql://127.0.0.1:3307/test1", "root", "root").nn
 
     val mask = new MySqlBitSet(0x1234)
 //    conn.executeUpdate(sql"insert into sku_barcode values(5, $mask)")
@@ -32,7 +32,7 @@ object TestBitSet {
 
     conn.eachRow[Row]("select * from sku_barcode") { row =>
       val id = row.get[Int](1)
-      val flag = row.get[MySqlBitSet](2)
+      val flag = row.get[MySqlBitSet|Null](2).nn
       println(s"id = $id flags = ${flag.mask}")
     }
 

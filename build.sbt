@@ -6,7 +6,7 @@ version := "3.0.0"
 
 scalaVersion := "3.1.3"
 
-// scalacOptions := Seq( "-Yexplicit-nulls" )
+scalacOptions := Seq( "-Yexplicit-nulls" )
 
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.9",

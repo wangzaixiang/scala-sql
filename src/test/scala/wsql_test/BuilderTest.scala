@@ -27,7 +27,7 @@ class BuilderTest extends AnyFunSuite {
     given Conversion[Int, String] with
       override def apply(x: Int): String = Integer.toString(x)
 
-    case class PersonA(name: String, age: String, address: AddressA)
+    case class PersonA(name: String, age: String|Null, address: AddressA)
     case class AddressA(street: String, city: String)
 
     case class PersonB(name: String, age: Option[Int], address: AddressB)
@@ -102,7 +102,7 @@ class BuilderTest extends AnyFunSuite {
   
   test("self reference"){
 
-    assertCompiles("""
+    assertDoesNotCompile("""
       case class User(name: String, age: Int, Parent: User)
       case class User2(name: String, age: Int, Parent: User2)
       val user = User("John", 20, User("Steven", 50, null))

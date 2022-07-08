@@ -20,10 +20,10 @@ object Macros {
     names.zip(idents).toMap
 
   def createBatchImpl[T: Type](proc: Expr[T=>SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
-    '{ null }
+    '{ ??? }
 
   def createMysqlBatchImpl[T: Type](proc: Expr[T=>SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
-    '{ null }
+    '{ ??? }
 
 
   // tryBuild[ String, Int ]

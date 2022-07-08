@@ -19,19 +19,20 @@ object mysql {
 
   object MySqlBitSet {
 
-    implicit object jdbcValueAccessor extends JdbcValueAccessor[MySqlBitSet] {
+    implicit object jdbcValueAccessor extends JdbcValueAccessor[MySqlBitSet|Null] {
 
-      override def passIn(stmt: PreparedStatement, index: Int, value: MySqlBitSet): Unit =
-        stmt.setBytes(index, toByteArray(value.mask))
+      override def passIn(stmt: PreparedStatement, index: Int, value: MySqlBitSet|Null): Unit =
+        if(value == null) stmt.setNull(index, java.sql.Types.ARRAY)
+        else stmt.setBytes(index, toByteArray(value.mask))
 
-      override def passOut(rs: ResultSet, index: Int): MySqlBitSet = {
+      override def passOut(rs: ResultSet, index: Int): MySqlBitSet|Null = {
         val v = rs.getBytes(index)
         if(v != null)
           new MySqlBitSet(fromByteArray(v))
         else null
       }
 
-      override def passOut(rs: ResultSet, name: String): MySqlBitSet = {
+      override def passOut(rs: ResultSet, name: String): MySqlBitSet|Null = {
         val v = rs.getBytes(name)
         if(v != null)
           new MySqlBitSet(fromByteArray(v))
