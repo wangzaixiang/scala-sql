@@ -12,34 +12,28 @@ given ConnectionOps with
 
     def withStatement[T](f: Statement => T): T =
       val stmt = conn.createStatement.nn
-      try {
+      try
         f(stmt)
-      } finally {
+      finally
         stmt.close()
-      }
-
 
     private def withPreparedStatement[T](sql: String)(f: PreparedStatement => T): T =
       val stmt = conn.prepareStatement(sql).nn
-      try {
+      try
         f(stmt)
-      } finally {
+      finally
         stmt.close()
-      }
-
 
     def withTransaction[T](f: Connection => T): T =
-      try {
+      try
         conn.setAutoCommit(false)
         val result = f(conn)
         conn.commit
         result
-      } catch {
+      catch
         case ex: Throwable =>
           conn.rollback
           throw ex
-      }
-
 
     inline def createBatch[T](proc: T => SQLWithArgs): Batch[T] =
       ${ Macros.createBatchImpl[T]('proc, 'conn) }
@@ -53,9 +47,9 @@ given ConnectionOps with
     def executeUpdate(stmt: SQLWithArgs): Int = executeUpdateWithGenerateKey(stmt)(rs=>())
 
     @inline private def setStatementArgs(stmt: PreparedStatement, args: Seq[JdbcValue[_]|Null]) =
-      args.zipWithIndex.foreach {
-        case (v, idx) =>
-          if(v == null) stmt.setNull(idx + 1, Types.VARCHAR) else v.passIn(stmt, idx + 1)
+      args.zipWithIndex.foreach { case (v, idx) =>
+        //        case (v, idx) =>
+        if (v == null) stmt.setNull(idx + 1, Types.VARCHAR) else v.passIn(stmt, idx + 1)
       }
 
     // TODO provide a NOOP operation
@@ -64,33 +58,27 @@ given ConnectionOps with
         if(processGenerateKeys != NoopProcessor) Statement.RETURN_GENERATED_KEYS
         else Statement.NO_GENERATED_KEYS ).nn
 
-      try {
+      try
         setStatementArgs(prepared, stmt.args)
-
         LOG.debug("SQL Preparing: {} args: {}", Seq(stmt.sql, stmt.args): _*)
 
         val result = prepared.executeUpdate().nn
-
-        if(processGenerateKeys != NoopProcessor) {
+        if(processGenerateKeys != NoopProcessor)
           val keys = prepared.getGeneratedKeys.nn
           processGenerateKeys(keys)
-        }
 
         LOG.debug("SQL result: {}", result)
         result
-      }
-      finally {
+      finally
         prepared.close
-      }
 
     def generateKey[T: JdbcValueAccessor](stmt: SQLWithArgs): T =
       var t: Option[T] = None
 
       executeUpdateWithGenerateKey(stmt) { rs =>
-        if (rs.next) {
-          val x = implicitly[JdbcValueAccessor[T]].passOut(rs, 1)
+        if (rs.next)
+          val x = summon[JdbcValueAccessor[T]].passOut(rs, 1)
           Option(x.asInstanceOf[AnyRef]).asInstanceOf[Option[T]]
-        }
       }
 
       assert(t.isDefined, s"the sql doesn't return a generated key but expected")
@@ -102,15 +90,13 @@ given ConnectionOps with
 
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
-      val mapper = implicitly[ResultSetMapper[T]]
+      val mapper = summon[ResultSetMapper[T]]
       val rs = prepared.executeQuery().nn
-      // val rsMeta = rs.getMetaData
+
       var rowCount = 0
-      while (rs.next()) {
-        val mapped = mapper.from(rs)
-        f(mapped)
+      while (rs.next())
+        f( mapper.from(rs) )
         rowCount += 1
-      }
       LOG.debug("SQL result: {}", rowCount)
     }
 
@@ -121,12 +107,10 @@ given ConnectionOps with
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
-      // val rsMeta = rs.getMetaData
-      while (rs.next()) {
-        val mapped = implicitly[ResultSetMapper[T]].from(rs)
-        buffer += mapped
 
-      }
+      while rs.next() do
+        buffer += summon[ResultSetMapper[T]].from(rs)
+
       LOG.debug("SQL result: {}", buffer.size)
       buffer.toList
     }
@@ -138,12 +122,11 @@ given ConnectionOps with
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
-      // val rsMeta = rs.getMetaData
-      while (rs.next()) {
-        val t1: T1 = implicitly[ResultSetMapper[T1]].from(rs)
-        val t2: T2 = implicitly[ResultSetMapper[T2]].from(rs)
+
+      while (rs.next())
+        val t1: T1 = summon[ResultSetMapper[T1]].from(rs)
+        val t2: T2 = summon[ResultSetMapper[T2]].from(rs)
         buffer += Tuple2(t1, t2)
-      }
 
       LOG.debug("SQL result: {}", buffer.size)
 
@@ -157,13 +140,12 @@ given ConnectionOps with
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
-      // val rsMeta = rs.getMetaData
-      while (rs.next()) {
-        val t1: T1 = implicitly[ResultSetMapper[T1]].from(rs)
-        val t2: T2 = implicitly[ResultSetMapper[T2]].from(rs)
-        val t3: T3 = implicitly[ResultSetMapper[T3]].from(rs)
+
+      while (rs.next())
+        val t1: T1 = summon[ResultSetMapper[T1]].from(rs)
+        val t2: T2 = summon[ResultSetMapper[T2]].from(rs)
+        val t3: T3 = summon[ResultSetMapper[T3]].from(rs)
         buffer += Tuple3(t1, t2, t3)
-      }
 
       LOG.debug("SQL result: {}", buffer.size)
 
@@ -177,14 +159,13 @@ given ConnectionOps with
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
-      // val rsMeta = rs.getMetaData
-      while (rs.next()) {
-        val t1: T1 = implicitly[ResultSetMapper[T1]].from(rs)
-        val t2: T2 = implicitly[ResultSetMapper[T2]].from(rs)
-        val t3: T3 = implicitly[ResultSetMapper[T3]].from(rs)
-        val t4: T4 = implicitly[ResultSetMapper[T4]].from(rs)
+
+      while (rs.next())
+        val t1: T1 = summon[ResultSetMapper[T1]].from(rs)
+        val t2: T2 = summon[ResultSetMapper[T2]].from(rs)
+        val t3: T3 = summon[ResultSetMapper[T3]].from(rs)
+        val t4: T4 = summon[ResultSetMapper[T4]].from(rs)
         buffer += Tuple4(t1, t2, t3, t4)
-      }
 
       LOG.debug("SQL result: {}", buffer.size)
 
@@ -199,14 +180,12 @@ given ConnectionOps with
       val rs = prepared.executeQuery().nn
 
       var result: Option[T] = None
-
-      if (rs.next()) {
-        result = Some(implicitly[ResultSetMapper[T]].from(rs))
+      if (rs.next())
+        result = Some(summon[ResultSetMapper[T]].from(rs))
         if (rs.next())
           LOG.warn("expect 1 row but has more")
         else
           LOG.debug("SQL result: 1")
-      }
       else
         LOG.debug("SQL result: 0")
 
@@ -219,18 +198,16 @@ given ConnectionOps with
       LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
-
       var result: Option[(T1, T2)] = None
 
-      if (rs.next()) {
-        val t1 = implicitly[ResultSetMapper[T1]].from(rs)
-        val t2 = implicitly[ResultSetMapper[T2]].from(rs)
+      if (rs.next())
+        val t1 = summon[ResultSetMapper[T1]].from(rs)
+        val t2 = summon[ResultSetMapper[T2]].from(rs)
         result = Some(Tuple2(t1, t2))
         if (rs.next())
           LOG.warn("expect 1 row but has more")
         else
           LOG.debug("SQL result: 1")
-      }
       else
         LOG.debug("SQL result: 0")
 
@@ -246,16 +223,15 @@ given ConnectionOps with
 
       var result: Option[(T1, T2, T3)] = None
 
-      if (rs.next()) {
-        val t1 = implicitly[ResultSetMapper[T1]].from(rs)
-        val t2 = implicitly[ResultSetMapper[T2]].from(rs)
-        val t3 = implicitly[ResultSetMapper[T3]].from(rs)
+      if (rs.next())
+        val t1 = summon[ResultSetMapper[T1]].from(rs)
+        val t2 = summon[ResultSetMapper[T2]].from(rs)
+        val t3 = summon[ResultSetMapper[T3]].from(rs)
         result = Some(Tuple3(t1, t2, t3))
         if (rs.next())
           LOG.warn("expect 1 row but has more")
         else
           LOG.debug("SQL result: 1")
-      }
       else
         LOG.debug("SQL result: 0")
 
@@ -271,17 +247,16 @@ given ConnectionOps with
 
       var result: Option[(T1, T2, T3, T4)] = None
 
-      if (rs.next()) {
-        val t1 = implicitly[ResultSetMapper[T1]].from(rs)
-        val t2 = implicitly[ResultSetMapper[T2]].from(rs)
-        val t3 = implicitly[ResultSetMapper[T3]].from(rs)
-        val t4 = implicitly[ResultSetMapper[T4]].from(rs)
+      if (rs.next())
+        val t1 = summon[ResultSetMapper[T1]].from(rs)
+        val t2 = summon[ResultSetMapper[T2]].from(rs)
+        val t3 = summon[ResultSetMapper[T3]].from(rs)
+        val t4 = summon[ResultSetMapper[T4]].from(rs)
         result = Some(Tuple4(t1, t2, t3, t4))
         if (rs.next())
           LOG.warn("expect 1 row but has more")
         else
           LOG.debug("SQL result: 1")
-      }
       else
         LOG.debug("SQL result: 0")
 
@@ -296,9 +271,9 @@ given ConnectionOps with
 
       val rs = prepared.executeQuery().nn
 
-      if (rs.next) {
+      if (rs.next)
         rs.getInt(1)
-      } else throw new IllegalArgumentException("query return no rows")
+      else throw new IllegalArgumentException("query return no rows")
     }
 
 given DataSourceOps with
@@ -306,11 +281,10 @@ given DataSourceOps with
   extension (datasource: javax.sql.DataSource)
     private def withConnection[T](f: Connection => T): T =
       val conn = datasource.getConnection.nn
-      try {
+      try
         f(conn)
-      } finally {
+      finally
         conn.close()
-      }
 
     def withStatement[T](f: Statement => T): T = withConnection(_.withStatement(f))
 
