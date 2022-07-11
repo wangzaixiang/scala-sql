@@ -102,7 +102,7 @@ class BuilderTest extends AnyFunSuite {
   
   test("self reference"){
 
-    assertCompiles("""
+    assertDoesNotCompile("""
       case class User(name: String, age: Int, Parent: User)
       case class User2(name: String, age: Int, Parent: User2)
       val user = User("John", 20, User("Steven", 50, null))
