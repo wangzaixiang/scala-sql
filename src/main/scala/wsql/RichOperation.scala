@@ -35,7 +35,7 @@ given ConnectionOps with
           conn.rollback
           throw ex
 
-    inline def createBatch[T](proc: T => SQLWithArgs): Batch[T] =
+    inline def createBatch[T](inline proc: T => SQLWithArgs): Batch[T] =
       ${ Macros.createBatchImpl[T]('proc, 'conn) }
 
     /**

@@ -20,6 +20,34 @@ object Macros {
     names.zip(idents).toMap
 
   def createBatchImpl[T: Type](proc: Expr[T=>SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
+    import quotes.reflect.*
+//    println(s"proc is  ${ proc.asTerm.show(using Printer.TreeStructure) } ")
+    // rewrite T=>SQLWithArgs to (T=>List[JdbcValue[?]|Null]) && proc.statement
+
+    proc.asTerm match
+      case Inlined(_, _, Block(_, Lambda(defs, term) ) ) =>
+        println("defs = " + defs.map(_.show) ) // parameters
+//        println("term = " + term)
+
+        term match
+          case Block( stmts, result) =>
+            println("stmts = " + stmts.map(_.show))
+
+            result match // sql"..."
+              case Apply( Apply( sql, List( Apply(_, sc_args)) ), args ) =>
+                println("result.sql = " + sql.show)
+                println("result.sc = " + sc_args.map(_.show) )
+                println("result.args = " + args.map(_.show) )
+
+        // TODO  reweite the AST
+//            Lambda( Symbol.spliceOwner, mtpe, { case (methSym, List(arg: Term))=>
+//              given Quotes = methSym.asQuotes
+//
+//            })
+
+      case _ => println("not matched")
+
+
     '{ ??? }
 
   def createMysqlBatchImpl[T: Type](proc: Expr[T=>SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =

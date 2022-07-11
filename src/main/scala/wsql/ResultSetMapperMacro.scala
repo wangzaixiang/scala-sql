@@ -54,7 +54,6 @@ object ResultSetMapperMacro:
             case Some(accessor) =>
               Type.of[t] match
                 case '[Option[t2]] => // Option[Int] ->
-//                  val a = defaultParams.get(name) //
                   val primitive = isPrimitive(TypeRepr.of[t2])
                   val defaultExpr: Expr[Option[t2]] = defaultParams.get(name) match  // Option(Expr[Option[t2]])
                     case Some(deff) =>  '{ ${deff}.asInstanceOf[Option[t2]] } // deff maybe Expr[None] also

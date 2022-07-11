@@ -368,7 +368,7 @@ trait ConnectionOps:
   extension (conn: Connection)
     def withStatement[T](f: Statement => T): T
     def withTransaction[T](f: Connection=>T): T
-    inline def createBatch[T](proc: T=>SQLWithArgs): Batch[T]
+    inline def createBatch[T](inline proc: T=>SQLWithArgs): Batch[T]
     inline def createMysqlBatch[T](proc: T=>SQLWithArgs): Batch[T]
     def executeUpdate(stmt: SQLWithArgs): Int
     def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(proc: ResultSet=>Unit = NoopProcessor): Int

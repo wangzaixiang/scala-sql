@@ -14,7 +14,7 @@ object SampleDB {
     ds.setUser("sa")
     ds.setPassword("")
 
-    val conn = ds.getConnection
+    val conn = ds.getConnection.nn
 
     prepareDB(ds)
 
