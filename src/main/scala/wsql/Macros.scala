@@ -7,94 +7,6 @@ import scala.deriving.Mirror
 
 object Macros {
 
-//  inline def tryReflect1(conn: Connection): Batch[User] = ${ tryReflectImpl2('conn ) }
-//
-//  def tryReflectImpl1(conn: Expr[Connection])(using Quotes): Expr[Batch[User]] =
-//    import quotes.reflect.*
-//
-//    val expr = '{
-//      val f: User=>List[JdbcValue[?]] = (u)=>List( u.name )
-//      BatchImpl.apply[User]($conn, "select stmt", f)
-//    }
-//    println("tryReflect1 = " + expr.asTerm.show(using Printer.TreeStructure))
-//    expr.asTerm match
-//      case Inlined(_, _, Block( List(ValDef(_, _, Some(Block(list, closure)))), _)) =>
-//        println("closure = " + closure.show)
-//        closure match
-//          case Closure(term, tpe) =>
-//            println("\n\nterm = " + term.show(using Printer.TreeStructure))
-//            println("term.tpe = " + term.tpe.widen.show(using Printer.TypeReprStructure))
-//            println("term.tpe = " + TypeTree.of[AnyKind](using term.tpe.widen.asType.asInstanceOf[Type[AnyKind]]).show)
-//            println("tpe = " + tpe)
-//      case _ => println("not matched")
-//    expr
-
-//  def tryReflectImpl2(conn: Expr[Connection])(using Quotes): Expr[Batch[User]] =
-//    import quotes.reflect.*
-//
-//    val jdbcValueTpt = Applied( TypeIdent( Symbol.requiredClass("wsql.JdbcValue") ),
-//      List( TypeBoundsTree(TypeTree.of[Nothing], TypeTree.of[Any])  )
-//    )
-//    // List[ JdbcValue[?] ]
-//    val listOfJdbcValueTpt = Applied( TypeIdent(Symbol.requiredClass("scala.collection.immutable.List")),
-//      List( jdbcValueTpt )
-//    )
-//    // User => List[ JdbcValue[?] ]
-//    val funcTpt = Applied( TypeIdent(Symbol.requiredClass("scala.Function1")),
-//      List(TypeTree.of[User], listOfJdbcValueTpt)
-//    )
-//    val symbolFunc = Symbol.newVal( Symbol.spliceOwner, "f", funcTpt.tpe, Flags.EmptyFlags, Symbol.noSymbol)
-//
-//    val funcTpe = MethodType(List("u"))(
-//      (mt)=>List(TypeTree.of[User].tpe),
-//      (mt)=>listOfJdbcValueTpt.tpe
-//    )
-//    val anonyMethodSymbol = Symbol.newMethod( Symbol.spliceOwner, "$anonfun", funcTpe, Flags.EmptyFlags, Symbol.noSymbol)
-//
-//    // List.apply( u.name )
-//    // JdbcValue.apply[String]( u.name )(using oo)
-//    def uname(u: Tree) =
-//      import wsql.given
-//      val a = Select.unique(Ref(u.symbol) , "name").asExpr.asInstanceOf[Expr[String]]
-//      val b = '{ JdbcValue[String]($a): JdbcValue[String] }  // TODO using Tree
-//      b.asTerm
-//
-//
-//    // val seqOfJdbcValueTpt = Applied( TypeIdent(Symbol.requiredClass("scala.Seq")), List(OO) )
-//    def applyArgs(u: Tree) = List( Typed(
-//      expr = Repeated(
-//        elems = List( uname(u) ),
-//        tpt = jdbcValueTpt
-//      ),
-//      tpt = jdbcValueTpt ) )
-//
-//    val rhsFn = (x: List[List[Tree]])=> Some( // 1
-//      Apply( TypeApply( Select.unique(Ref(Symbol.requiredModule("scala.collection.immutable.List")), "apply"),
-//        List(Inferred(jdbcValueTpt.tpe))
-//      ), applyArgs(x(0)(0)))
-//    )
-//    val defdef = DefDef(anonyMethodSymbol, rhsFn )
-//
-//    val closure = Closure( Ref(anonyMethodSymbol), tpe = None )
-//
-//    val rhs = Block( List(defdef), closure )
-//
-//    val valdef = ValDef( symbolFunc, Some(rhs) )
-//    val apply = Apply(
-//      TypeApply( Select.unique(Ref(Symbol.requiredModule("wsql.BatchImpl")), "apply"),
-//        List( TypeTree.of[User] )
-//      ),
-//      List( conn.asTerm, Literal(StringConstant("select stmt")),
-//        Ref(symbolFunc)
-//      )
-//    )
-//    val expr = Block( List(valdef), apply).asExpr
-////    println("!!! expr = " + expr.show)
-//    println("!!! expr = " + expr.asTerm.show(using Printer.TreeStructure))
-//    val x = expr.asInstanceOf[Expr[Batch[User]]]
-//    println("!!! return expr = ")
-//    x
-
   def defaultParamsForCaseClass[T: Type](using Quotes): Map[String, Expr[Any]] =
     import quotes.reflect._
     val sym = TypeTree.of[T].symbol
@@ -108,112 +20,6 @@ object Macros {
 
     names.zip(idents).toMap
 
-//  def createBatchImpl[T: Type](proc: Expr[T=>SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
-//    import quotes.reflect.*
-//    val symJdbcValue = Symbol.requiredClass("wsql.JdbcValue")
-//    val symList = Symbol.requiredClass("scala.collection.immutable.List")
-//    val function1 = Symbol.requiredClass("scala.Function1")
-//
-//    def funcTpt: TypeTree =
-//      val returnTpt = // List[JdbcValue[?]]
-//        Applied(TypeIdent(symList), List(
-//          Applied(TypeIdent(symJdbcValue), List(TypeBoundsTree(TypeTree.of[Nothing], TypeTree.of[Any])))
-//        ))
-//
-//      Applied(TypeIdent(function1), List(TypeTree.of[T], returnTpt))
-//
-//
-//    proc.asTerm match
-//      case Inlined(_, _, Block(_, Lambda(defs, term))) =>
-////        println( "unapply:" + Lambda.unapply(block) )
-////        block match
-////          case Lambda(Tuple2(defs, term)) =>
-//      case _ => println("not matched for proc: " + proc.asTerm.show(using Printer.TreeStructure))
-//
-//    val changes = new TreeMap:
-//      var tpe: TypeRepr|Null = null
-//      var defSymbol: Symbol|Null = null
-//
-//      override def transformStatement(tree: Statement)(owner: Symbol): Statement =
-//        tree match
-//          case tree: DefDef =>
-//            val owner = tree.symbol
-//            val newParamClauses = tree.paramss.mapConserve {
-//              case TypeParamClause(params) => TypeParamClause( transformSubTrees(params)(owner) )
-//              case TermParamClause(params) => TermParamClause( transformSubTrees(params)(owner) )
-//            }
-//            val rhs =
-//            tree.rhs match
-//              case Some( block@Block( stats, apply: Apply) ) =>
-//                val newStats = transformStats(stats)(owner)
-//                val newApply = extractJdbcValuesFromStringContext(apply)
-//                val newApply2 = transformTerm(newApply)(owner)
-//                Some( Block.copy(block)( newStats, newApply2 ) )
-//              case _ => None
-//
-//            val returnTpt = // TypeTree.of[String]
-//              Applied( TypeIdent(symList), List(
-//                Applied( TypeIdent(symJdbcValue), List( TypeBoundsTree(TypeTree.of[Nothing], TypeTree.of[Any]))  )
-//              ))
-//
-//            tpe = MethodType(List("x"))( mt=> List(TypeRepr.of[T]), mt=> returnTpt.tpe)
-//            println("tpe = " + tpe.nn.show(using Printer.TypeReprStructure))
-//
-//            val defdef = DefDef.copy(tree)(tree.name, newParamClauses, returnTpt, rhs)
-//            defSymbol = defdef.symbol
-//            defdef
-//          case _ => super.transformStatement(tree)(owner)
-//
-//      override def transformTerm(tree: Term)(owner: Symbol): Term =
-//        tree match
-//          case Closure(meth, tpt) =>
-//            Closure.copy(tree)( Ref(defSymbol.nn), Some(tpe.nn))
-//          case _ => super.transformTerm(tree)(owner)
-//
-//      // Apply(
-//      def extractJdbcValuesFromStringContext(apply: Apply): Apply =
-//        apply match
-//          case Apply( sc, args ) =>
-//            Apply(
-//              TypeApply(
-//                Select.unique( Ref(Symbol.requiredModule("scala.collection.immutable.List")), "apply" ),
-//                List( Applied( TypeIdent(symJdbcValue), List( TypeBoundsTree(TypeTree.of[Nothing], TypeTree.of[Any]))))
-//              ), args
-//            )
-////            List( Applied( TypeTree.of[JdbcValue], List( TypeBoundsTree(TypeTree.of[Nothing], TypeTree.of[Any]) ) ) ) ), args)
-//
-//
-//    val after = changes.transformTerm(proc.asTerm)(Symbol.spliceOwner)
-//    val asFunc = Typed(after, funcTpt)
-//
-//    println("!!after = " + after.show(using Printer.TreeStructure))
-//
-//    // val afterExpr: Expr[ T => List[JdbcValue[?]] ] = after.asExpr.asInstanceOf[ Expr[T=>List[JdbcValue[?]] ] ]
-//
-////    val x = '{
-////      val f: User => List[JdbcValue[?]|Null] = (u) => {
-////        val name = u.name.toUpperCase()
-////        List(name, u.age, u.email)
-////      }
-////      BatchImpl.apply[User]($conn, "select stmt", f)
-////    }
-//    val x = '{
-//      val f: scala.Function1[User, List[JdbcValue[?]]] = (u) => {
-//        val name = u.name.toUpperCase()
-//        scala.collection.immutable.List.apply[JdbcValue[?]](name, u.age, u.email)
-//      }
-//      BatchImpl.apply[User]($conn, "select stmt", f)
-//   }
-//
-//    val symbolF = Symbol.newVal(Symbol.spliceOwner, "f", funcTpt.tpe, Flags.Final, Symbol.noSymbol)
-//    val valF = ValDef(symbolF, Some(after))
-//    val result = Apply( TypeApply( Select.unique( Ref( Symbol.requiredModule("wsql.BatchImpl")), "apply"), List(TypeTree.of[T]) ),
-//      List(conn.asTerm, Literal(StringConstant("select stement")), Ref(symbolF))
-//    )
-//
-//    val y = Block(List(valF), result)
-//
-//    y.asExpr.asInstanceOf[Expr[Batch[T]]]
 
   def buildBatchExpr[T: Type](using quotes: Quotes)(conn: Expr[Connection], lambda2: quotes.reflect.Term): Expr[Batch[T]] =
     import quotes.reflect.*
@@ -231,42 +37,6 @@ object Macros {
     )
     val symbolFunc = Symbol.newVal(Symbol.spliceOwner, "f", funcTpt.tpe, Flags.EmptyFlags, Symbol.noSymbol)
 
-//    // Lambda T=>List[JdbcValue[?]]
-//    val lambda = {
-//      val funcTpe = MethodType(List("u"))(
-//        (mt) => List(TypeTree.of[T].tpe),
-//        (mt) => listOfJdbcValueTpt.tpe
-//      )
-//      val anonyMethodSymbol = Symbol.newMethod(Symbol.spliceOwner, "$anonfun", funcTpe, Flags.EmptyFlags, Symbol.noSymbol)
-//
-//      // List.apply( u.name )
-//      // JdbcValue.apply[String]( u.name )(using oo)
-//      def uname(u: Tree) =
-//        import wsql.given
-//        val a = Select.unique(Ref(u.symbol), "name").asExpr.asInstanceOf[Expr[String]]
-//        val b = '{JdbcValue[String]($a): JdbcValue[String]} // TODO using Tree
-//        b.asTerm
-//
-//      // val seqOfJdbcValueTpt = Applied( TypeIdent(Symbol.requiredClass("scala.Seq")), List(OO) )
-//      def applyArgs(u: Tree) = List(Typed(
-//        expr = Repeated(
-//          elems = List(uname(u)),
-//          tpt = jdbcValueTpt
-//        ),
-//        tpt = jdbcValueTpt))
-//
-//      val rhsFn = (x: List[List[Tree]]) => Some( // 1
-//        Apply(TypeApply(Select.unique(Ref(Symbol.requiredModule("scala.collection.immutable.List")), "apply"),
-//          List(Inferred(jdbcValueTpt.tpe))
-//        ), applyArgs(x(0)(0)))
-//      )
-//
-//      val defdef = DefDef(anonyMethodSymbol, rhsFn)
-//
-//      val closure = Closure(Ref(anonyMethodSymbol), tpe = None)
-//      Block(List(defdef), closure)
-//    }
-
     val valdef = ValDef(symbolFunc, Some(lambda2))
     val apply = Apply(
       TypeApply(Select.unique(Ref(Symbol.requiredModule("wsql.BatchImpl")), "apply"),
@@ -277,10 +47,8 @@ object Macros {
       )
     )
     val expr = Block(List(valdef), apply)
-    // println("!!! expr = " + expr.asTerm.show(using Printer.TreeStructure))
 
-    val x = expr.asExpr.asInstanceOf[Expr[Batch[T]]]
-    x
+    expr.asExpr.asInstanceOf[Expr[Batch[T]]]
 
   def buildLamdba[T:Type](using quotes:Quotes)(lambdaBlock: quotes.reflect.Term): quotes.reflect.Term =
     import quotes.reflect.*
@@ -347,7 +115,6 @@ object Macros {
             val symbol = Symbol.newVal(defSymbol.nn, name, tpt1.tpe, Flags.Final, Symbol.noSymbol)
             val it =  ValDef(symbol, rhs1)
             childSymbols(name) = symbol
-
             it
 
           case _ => super.transformStatement(tree)(owner)
@@ -375,7 +142,6 @@ object Macros {
                 List(Applied(TypeIdent(Symbol.requiredClass("wsql.JdbcValue")), List(TypeBoundsTree(TypeTree.of[Nothing], TypeTree.of[Any]))))
               ), args
             )
-    //            List( Applied( TypeTree.of[JdbcValue], List( TypeBoundsTree(TypeTree.of[Nothing], TypeTree.of[Any]) ) ) ) ), args)
     end transform
 
     val result = transform.transformTerm(lambdaBlock)(Symbol.spliceOwner)
