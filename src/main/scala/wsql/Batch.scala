@@ -15,8 +15,11 @@ trait Batch[T] {
 
 }
 
+object BatchImpl:
+  def apply[T](conn: Connection, statement: String, proc: T=>List[JdbcValue[?]|Null]) =
+    new BatchImpl[T](conn, statement)(proc)
 
-case class BatchImpl[T](conn: Connection, statement: String ) ( proc: T => List[JdbcValue[?]|Null] ) extends Batch[T] {
+class BatchImpl[T](conn: Connection, statement: String ) ( proc: T => List[JdbcValue[?]|Null] ) extends Batch[T] {
 
   val stmt: PreparedStatement = conn.prepareStatement(statement).nn
 

@@ -36,7 +36,7 @@ given ConnectionOps with
           throw ex
 
     inline def createBatch[T](inline proc: T => SQLWithArgs): Batch[T] =
-      ${ Macros.createBatchImpl[T]('proc, 'conn) }
+      ${ Macros.createBatchImpl2[T]('proc, 'conn) }
 
     /**
       * translate the "insert into table set a = ?, b = ?" into "insert into table(a,b) values(?,?)

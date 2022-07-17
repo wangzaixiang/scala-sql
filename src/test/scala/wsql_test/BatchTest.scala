@@ -3,26 +3,26 @@ package wsql_test
 import org.scalatest.funsuite.*
 import wsql.{given, *}
 
-class BatchTest extends AnyFunSuite {
+class BatchTest {
 
   val conn = SampleDB.conn
+  case class User(name: String, age: Int, email: String)
 
-  test("Simple batch") {
+  def main(args: Array[String]): Unit = {
 
-    case class User(name: String, age: Int, email: String)
+    val list = List(User("John", 30, "john@qq.ckm"))
     val batch = conn.createBatch[User] { u =>
       val name = u.name.toUpperCase()
       sql"insert into users(name, age, email) values(${name}, ${u.age}, ${u.email})"
     }
 
-    // rewrite as
-    val batch2 = BatchImpl[User](conn, "insert into users(name, age, email) values(?, ?, ?)") { (u: User) =>
-      val name = u.name.toUpperCase()
-      List(name, u.age, u.email)
-    }
-
-    println()
+//     rewrite as
+//    val batch2 = BatchImpl.apply[User](conn, "insert into users(name, age, email) values(?, ?, ?)", { (u: User) =>
+//      val name = u.name.toUpperCase()
+//      List(name, u.age, u.email)
+//    })
 
   }
+
 
 }
