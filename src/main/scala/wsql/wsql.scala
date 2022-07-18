@@ -76,6 +76,11 @@ object JdbcValueAccessor:
         case x: T@unchecked => Some(x)
         case null => None
 
+  given JdbcValueAccessor[Null] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: Null): Unit = stmt.setNull(index, Types.CHAR)
+    inline def passOut(rs: ResultSet, index: Int): Null = null
+    inline def passOut(rs: ResultSet, name: String): Null = null
+
   given JdbcValueAccessor[Boolean] with
     inline def passIn(stmt: PreparedStatement, index: Int, value: Boolean): Unit = stmt.setBoolean(index, value)
     inline def passOut(rs: ResultSet, index: Int): Boolean = rs.getBoolean(index)
@@ -277,7 +282,7 @@ object JdbcValue:
     override def apply(t: Option[T]) = JdbcValue(t)(using summon[JdbcValueAccessor[Option[T]]])
 
 extension (sc: StringContext)
-  def sql(args: JdbcValue[_]*) = SQLWithArgs(sc.parts.mkString("?"), args)
+  def sql(args: JdbcValue[?]|Null *) = SQLWithArgs(sc.parts.mkString("?"), args)
 
   /**
     * SQL"" will validate the sql statement at compiler time.
