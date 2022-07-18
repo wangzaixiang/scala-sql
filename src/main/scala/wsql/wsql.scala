@@ -1,12 +1,10 @@
 package wsql
 
-import ResultSetMapperMacro.resultSetMapperImpl
-import com.sun.beans.editors.DoubleEditor
-
 import javax.sql.DataSource
-import java.sql.{Blob, Clob, Connection, PreparedStatement, ResultSet, SQLException, Statement, Timestamp}
+import java.sql.{Connection, Statement, PreparedStatement, ResultSet, Types, SQLException, Timestamp, Clob, Blob}
 import java.util.Date
 import scala.annotation.StaticAnnotation
+import wsql.macros.*
 
 /**
   * wrap a sql"select * from table where id = $id" object
@@ -217,8 +215,8 @@ trait ResultSetMapper[T]:
   def from(rs: ResultSet): T
 
 object ResultSetMapper:
-  inline given material[T: deriving.Mirror.ProductOf]: ResultSetMapper[T] = ${ ResultSetMapperMacro.resultSetMapperImpl[T] }
-  inline def derived[T: deriving.Mirror.ProductOf]: ResultSetMapper[T] = ${ ResultSetMapperMacro.resultSetMapperImpl[T] }
+  inline given material[T: deriving.Mirror.ProductOf]: ResultSetMapper[T] = ${ ResultSetMapperMacros.resultSetMapperImpl[T] }
+  inline def derived[T: deriving.Mirror.ProductOf]: ResultSetMapper[T] = ${ ResultSetMapperMacros.resultSetMapperImpl[T] }
 
   given ResultSetMapper[Boolean] with
     def from(rs: ResultSet): Boolean = rs.getBoolean(1)

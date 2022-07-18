@@ -2,6 +2,7 @@ package wsql
 
 import java.sql.*
 import scala.collection.mutable.ListBuffer
+import wsql.macros.BatchMacros
 
 given ConnectionOps with
 
@@ -36,13 +37,13 @@ given ConnectionOps with
           throw ex
 
     inline def createBatch[T](inline proc: T => SQLWithArgs): Batch[T] =
-      ${ Macros.createBatchImpl2[T]('proc, 'conn) }
+      ${ BatchMacros.createBatchImpl[T]('proc, 'conn) }
 
     /**
       * translate the "insert into table set a = ?, b = ?" into "insert into table(a,b) values(?,?)
       */
     inline def createMysqlBatch[T](proc: T => SQLWithArgs): Batch[T] =
-      ${ Macros.createMysqlBatchImpl[T]('proc, 'conn) }
+      ${ BatchMacros.createMysqlBatchImpl[T]('proc, 'conn) }
 
     def executeUpdate(stmt: SQLWithArgs): Int = executeUpdateWithGenerateKey(stmt)(rs=>())
 

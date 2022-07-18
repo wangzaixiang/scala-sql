@@ -1,9 +1,8 @@
 package wsql.macros
 
-import wsql.{Batch, SQLWithArgs}
-
 import java.sql.Connection
 import scala.quoted.{Expr, Quotes, Type}
+import wsql.{Batch, SQLWithArgs}
 
 object BatchMacros {
 
@@ -111,8 +110,8 @@ object BatchMacros {
     val result = transform.transformTerm(lambdaBlock)(Symbol.spliceOwner)
     result
 
-
-  def createBatchImpl[T: Type](proc: Expr[T => SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
+  def createBatchImpl[T: Type](proc: Expr[T => SQLWithArgs], conn: Expr[Connection])(using quotes: Quotes): Expr[Batch[T]] =
+    import quotes.reflect.*
 
     val lambda = proc.asTerm match
       case Inlined(_, _, Block(Nil, lambdaBlock)) =>

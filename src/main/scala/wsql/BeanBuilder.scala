@@ -4,7 +4,7 @@ import java.util.concurrent.atomic.AtomicInteger
 
 import scala.collection.immutable
 import scala.reflect.ClassTag
-import scala.language.experimental.macros
+import wsql.macros.BuilderMacros
 
 /**
   * TODO support camel and underscore name mapping like doSomething <-> do_something
@@ -12,10 +12,10 @@ import scala.language.experimental.macros
 object BeanBuilder {
 
   inline def build[T:deriving.Mirror.ProductOf](inline sources: AnyRef*): T =
-    ${ Macros.buildCaseClassImpl[T]('sources)('{Seq.empty}) }
+    ${ BuilderMacros.buildCaseClassImpl[T]('sources)('{Seq.empty}) }
 
   inline def build[T:deriving.Mirror.ProductOf](inline sources: AnyRef*)(inline additions: (String, Any)*): T =
-    ${ Macros.buildCaseClassImpl[T]('sources)('additions) }
+    ${ BuilderMacros.buildCaseClassImpl[T]('sources)('additions) }
 
 // TODO
 //  inline def build[T:deriving.Mirror.ProductOf](sources: AnyRef*)(additions: T=>T = identity): T =
