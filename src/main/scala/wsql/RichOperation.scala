@@ -29,13 +29,16 @@ given ConnectionOps with
       try
         conn.setAutoCommit(false)
         val result = f(conn)
-        conn.commit
+        conn.commit()
         result
       catch
         case ex: Throwable =>
-          conn.rollback
+          conn.rollback()
           throw ex
 
+    /**
+     * Limit: the proc body should be simple statements. dont declare class/trait/object definitions inside.
+     */
     inline def createBatch[T](inline proc: T => SQLWithArgs): Batch[T] =
       ${ BatchMacros.createBatchImpl[T]('proc, 'conn) }
 
@@ -78,7 +81,7 @@ given ConnectionOps with
       executeUpdateWithGenerateKey(stmt) { rs =>
         if (rs.next)
           val x = summon[JdbcValueAccessor[T]].passOut(rs, 1)
-          Option(x.asInstanceOf[AnyRef]).asInstanceOf[Option[T]]
+          t = Option(x.asInstanceOf[AnyRef]).asInstanceOf[Option[T]]
       }
 
       assert(t.isDefined, s"the sql doesn't return a generated key but expected")

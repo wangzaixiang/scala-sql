@@ -37,25 +37,40 @@ object BatchMacros {
   private def buildLamdbaOfJdbcValues[T: Type](using quotes: Quotes)(lambdaOfSqlWithArgs: quotes.reflect.Term): quotes.reflect.Term =
     import quotes.reflect.*
 
+    def buildMethodType(paramss: List[ParamClause], tpt: TypeTree): MethodType =
+      paramss match
+        case head :: Nil =>
+          MethodType(head.params.map(_.name))(
+            (mt) => head.params.map(_.asInstanceOf[ValDef].tpt.tpe),
+            (mt) => tpt.tpe)
+        case Nil =>
+          MethodType(Nil)( mt=>Nil, mt=> tpt.tpe)
+        case others =>
+          val init = others.init
+          val last = others.last
+          val tree = TypeTree.of[Any](using buildMethodType(List(last), tpt).asType.asInstanceOf[Type[Any]])
+          buildMethodType(init, tree)
+
+
     // transform defdef method to return List[JdbcValue[?]] than SqlWithArgs
     val transform = new TreeMap :
 
-      var oldDefDefSym: Symbol | Null = null // old defdef symbol
-      val defMapping = collection.mutable.Map[String, Symbol]()  // symbols inside oldDefDef should mapping to news inside newDefDef
+      val symbolMapping = collection.mutable.Map[Symbol, Symbol]()
 
       override def transformStatement(tree: Statement)(owner: Symbol): Statement =
         tree match
-          case tree@DefDef(name, paramss, tpt, rhs0) =>
-            val arg0 = paramss(0).params(0)
+          case tree@DefDef(name, paramss, tpt, rhs0) if tree.symbol.owner == Symbol.spliceOwner => // top level defdef
+            val arg0 = paramss(0).params(0)  //
 
-            this.oldDefDefSym = tree.symbol
-            val funcTpe = MethodType(List("arg"))(
+            val funcTpe = MethodType(List(arg0.symbol.name))(
               (mt) => List(TypeTree.of[T].tpe),
               (mt) => listOfJdbcValueTpt.tpe
             )
             val newDefDefSym = Symbol.newMethod(Symbol.spliceOwner, "$anonfun", funcTpe, Flags.EmptyFlags, Symbol.noSymbol)
+            symbolMapping(tree.symbol) = newDefDefSym
+
             val rhsFn: List[List[Tree]] => Option[Term] = paramss =>
-              defMapping(arg0.name) = paramss(0)(0).symbol
+              symbolMapping( arg0.symbol ) = paramss(0)(0).symbol
               rhs0 match
                 case Some(Block(stats, strContext: Apply)) =>
                   val newStats = transformStats(stats)(newDefDefSym)
@@ -64,31 +79,47 @@ object BatchMacros {
                   Some(Block(newStats, extract2))
                 case _ => None
 
-            // this.defSymbol = anonymousMethodSymbol
-            defMapping(tree.name) = newDefDefSym
-            val defdef = DefDef(newDefDefSym, rhsFn)
-            defdef
+            DefDef(newDefDefSym, rhsFn)
 
-          case tree@ValDef(name, tpt, rhs) if tree.symbol.owner == oldDefDefSym =>
-            val owner = defMapping(oldDefDefSym.nn.name)
+          // support defdef inside the lambda
+          case tree@DefDef(name, paramss0, tpt, rhs0) if tree.symbol.owner != Symbol.spliceOwner =>
+            val defSym = tree.symbol
+            val owner = symbolMapping(tree.symbol.owner)
+            val funcType = buildMethodType(paramss0, tpt )
+
+            val newDefDefSym = Symbol.newMethod(owner, defSym.name, funcType, defSym.flags, Symbol.noSymbol)
+            symbolMapping(defSym) = newDefDefSym
+
+            val rhsFn: List[List[Tree]] => Option[Term] = paramss =>
+              for( i <- 0 until paramss.size; j <- 0 until paramss(i).size)
+                val param = paramss(i)(j)
+                val param0 = paramss0(i).params(j)
+                symbolMapping( param0.symbol ) = param.symbol
+
+              rhs0.map(term => transformTerm(term)(owner))
+            DefDef(newDefDefSym, rhsFn)
+
+          case tree: ClassDef =>
+            ???   // TODO add support for clone classdef
+
+          // support valdef definition
+          case tree@ValDef(name, tpt, rhs) =>
+            val owner0 = tree.symbol.owner
+            val owner = symbolMapping(owner0)
             val tpt1 = transformTypeTree(tree.tpt)(owner)
             val rhs1 = tree.rhs.map(x => transformTerm(x)(owner))
 
             val symbol = Symbol.newVal(owner, name, tpt1.tpe, Flags.Final, Symbol.noSymbol)
             val valdef = ValDef(symbol, rhs1)
-            defMapping(name) = symbol
+            symbolMapping(tree.symbol) = symbol
             valdef
 
           case _ => super.transformStatement(tree)(owner)
 
       override def transformTerm(tree: Term)(owner: Symbol): Term =
         tree match
-          case Ident(name) if tree.symbol.owner == oldDefDefSym =>
-            defMapping.get(name) match
-              case Some(symbol) => Ref(symbol)
-              case _ => ???
-          case Closure(meth, tpt) if meth.symbol == oldDefDefSym =>
-            Closure(Ref( defMapping(oldDefDefSym.nn.name) ), None)
+          case id@Ident(name) if symbolMapping contains id.symbol =>
+            Ref( symbolMapping(id.symbol) )
           case _ => super.transformTerm(tree)(owner)
 
       // extract args from StringContext(parts).apply(args)

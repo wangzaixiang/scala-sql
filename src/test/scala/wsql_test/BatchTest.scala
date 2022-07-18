@@ -12,16 +12,15 @@ class BatchTest {
 
     val list = List(User("John", 30, "john@qq.ckm"))
     val batch = conn.createBatch[User] { user =>
-      val name = user.name.toUpperCase()
       val age = user.age + 10
+
+      def test(s: String)(s2: String) : String =
+        s.toUpperCase.nn + s2.toUpperCase
+
+      val name = test(user.name)(user.email)
+
       sql"insert into users(name, age, email) values(${name}, ${age}, ${null})"
     }
-
-//     rewrite as
-//    val batch2 = BatchImpl.apply[User](conn, "insert into users(name, age, email) values(?, ?, ?)", { (u: User) =>
-//      val name = u.name.toUpperCase()
-//      List(name, u.age, u.email)
-//    })
 
   }
 
