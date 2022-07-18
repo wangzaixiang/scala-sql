@@ -45,11 +45,10 @@ given ConnectionOps with
     inline def createMysqlBatch[T](proc: T => SQLWithArgs): Batch[T] =
       ${ BatchMacros.createMysqlBatchImpl[T]('proc, 'conn) }
 
-    def executeUpdate(stmt: SQLWithArgs): Int = executeUpdateWithGenerateKey(stmt)(rs=>())
+    def executeUpdate(stmt: SQLWithArgs): Int = executeUpdateWithGenerateKey(stmt)(NoopProcessor)
 
-    @inline private def setStatementArgs(stmt: PreparedStatement, args: Seq[JdbcValue[_]|Null]) =
+    inline private def setStatementArgs(stmt: PreparedStatement, args: Seq[JdbcValue[_]|Null]) =
       args.zipWithIndex.foreach { case (v, idx) =>
-        //        case (v, idx) =>
         if (v == null) stmt.setNull(idx + 1, Types.VARCHAR) else v.passIn(stmt, idx + 1)
       }
 
@@ -61,14 +60,14 @@ given ConnectionOps with
 
       try
         setStatementArgs(prepared, stmt.args)
-        LOG.debug("SQL Preparing: {} args: {}", Seq(stmt.sql, stmt.args): _*)
+        if(LOG.isDebugEnabled) LOG.debug("SQL Preparing: {} args: {}", Seq(stmt.sql, stmt.args): _*)
 
         val result = prepared.executeUpdate().nn
         if(processGenerateKeys != NoopProcessor)
           val keys = prepared.getGeneratedKeys.nn
           processGenerateKeys(keys)
 
-        LOG.debug("SQL result: {}", result)
+        if(LOG.isDebugEnabled) LOG.debug("SQL result: {}", result)
         result
       finally
         prepared.close
@@ -89,7 +88,7 @@ given ConnectionOps with
     def eachRow[T: ResultSetMapper](sql: SQLWithArgs)(f: T => Unit): Unit = withPreparedStatement(sql.sql) { prepared =>
       setStatementArgs(prepared, sql.args)
 
-      LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
+      if(LOG.isDebugEnabled) LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val mapper = summon[ResultSetMapper[T]]
       val rs = prepared.executeQuery().nn
@@ -98,21 +97,21 @@ given ConnectionOps with
       while (rs.next())
         f( mapper.from(rs) )
         rowCount += 1
-      LOG.debug("SQL result: {}", rowCount)
+      if(LOG.isDebugEnabled) LOG.debug("SQL result: {}", rowCount)
     }
 
     def rows[T: ResultSetMapper](sql: SQLWithArgs): List[T] = withPreparedStatement(sql.sql) { prepared =>
       val buffer = new ListBuffer[T]()
       setStatementArgs(prepared, sql.args)
 
-      LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
+      if(LOG.isDebugEnabled) LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
 
       while rs.next() do
         buffer += summon[ResultSetMapper[T]].from(rs)
 
-      LOG.debug("SQL result: {}", buffer.size)
+      if(LOG.isDebugEnabled) LOG.debug("SQL result: {}", buffer.size)
       buffer.toList
     }
 
@@ -120,7 +119,7 @@ given ConnectionOps with
       val buffer = new ListBuffer[(T1, T2)]()
       setStatementArgs(prepared, sql.args)
 
-      LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
+      if(LOG.isDebugEnabled) LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
 
@@ -129,7 +128,7 @@ given ConnectionOps with
         val t2: T2 = summon[ResultSetMapper[T2]].from(rs)
         buffer += Tuple2(t1, t2)
 
-      LOG.debug("SQL result: {}", buffer.size)
+      if(LOG.isDebugEnabled) LOG.debug("SQL result: {}", buffer.size)
 
       buffer.toList
     }
@@ -138,7 +137,7 @@ given ConnectionOps with
       val buffer = new ListBuffer[(T1, T2, T3)]()
       setStatementArgs(prepared, sql.args)
 
-      LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
+      if(LOG.isDebugEnabled) LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
 
@@ -148,7 +147,7 @@ given ConnectionOps with
         val t3: T3 = summon[ResultSetMapper[T3]].from(rs)
         buffer += Tuple3(t1, t2, t3)
 
-      LOG.debug("SQL result: {}", buffer.size)
+      if(LOG.isDebugEnabled) LOG.debug("SQL result: {}", buffer.size)
 
       buffer.toList
     }
@@ -157,7 +156,7 @@ given ConnectionOps with
       val buffer = new ListBuffer[(T1, T2, T3, T4)]()
       setStatementArgs(prepared, sql.args)
 
-      LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
+      if(LOG.isDebugEnabled) LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
 
@@ -168,7 +167,7 @@ given ConnectionOps with
         val t4: T4 = summon[ResultSetMapper[T4]].from(rs)
         buffer += Tuple4(t1, t2, t3, t4)
 
-      LOG.debug("SQL result: {}", buffer.size)
+      if(LOG.isDebugEnabled) LOG.debug("SQL result: {}", buffer.size)
 
       buffer.toList
     }
@@ -176,7 +175,7 @@ given ConnectionOps with
     def row[T: ResultSetMapper](sql: SQLWithArgs): Option[T] = withPreparedStatement(sql.sql) { prepared =>
       setStatementArgs(prepared, sql.args)
 
-      LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
+      if(LOG.isDebugEnabled) LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
 
@@ -184,11 +183,11 @@ given ConnectionOps with
       if (rs.next())
         result = Some(summon[ResultSetMapper[T]].from(rs))
         if (rs.next())
-          LOG.warn("expect 1 row but has more")
+          if(LOG.isWarnEnabled) LOG.warn("expect 1 row but has more")
         else
-          LOG.debug("SQL result: 1")
+          if(LOG.isDebugEnabled) LOG.debug("SQL result: 1")
       else
-        LOG.debug("SQL result: 0")
+        if(LOG.isDebugEnabled) LOG.debug("SQL result: 0")
 
       result
     }
@@ -196,7 +195,7 @@ given ConnectionOps with
     def joinRow2[T1: ResultSetMapper, T2: ResultSetMapper](sql: SQLWithArgs): Option[(T1, T2)] = withPreparedStatement(sql.sql) { prepared =>
       setStatementArgs(prepared, sql.args)
 
-      LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
+      if(LOG.isDebugEnabled) LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
       var result: Option[(T1, T2)] = None
@@ -206,11 +205,11 @@ given ConnectionOps with
         val t2 = summon[ResultSetMapper[T2]].from(rs)
         result = Some(Tuple2(t1, t2))
         if (rs.next())
-          LOG.warn("expect 1 row but has more")
+          if(LOG.isWarnEnabled) LOG.warn("expect 1 row but has more")
         else
-          LOG.debug("SQL result: 1")
+          if(LOG.isDebugEnabled) LOG.debug("SQL result: 1")
       else
-        LOG.debug("SQL result: 0")
+        if(LOG.isDebugEnabled) LOG.debug("SQL result: 0")
 
       result
     }
@@ -218,7 +217,7 @@ given ConnectionOps with
     def joinRow3[T1: ResultSetMapper, T2: ResultSetMapper, T3: ResultSetMapper](sql: SQLWithArgs): Option[(T1, T2, T3)] = withPreparedStatement(sql.sql) { prepared =>
       setStatementArgs(prepared, sql.args)
 
-      LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
+      if(LOG.isDebugEnabled) LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
 
@@ -230,11 +229,11 @@ given ConnectionOps with
         val t3 = summon[ResultSetMapper[T3]].from(rs)
         result = Some(Tuple3(t1, t2, t3))
         if (rs.next())
-          LOG.warn("expect 1 row but has more")
+          if(LOG.isWarnEnabled) LOG.warn("expect 1 row but has more")
         else
-          LOG.debug("SQL result: 1")
+          if(LOG.isDebugEnabled) LOG.debug("SQL result: 1")
       else
-        LOG.debug("SQL result: 0")
+        if(LOG.isDebugEnabled) LOG.debug("SQL result: 0")
 
       result
     }
@@ -242,7 +241,7 @@ given ConnectionOps with
     def joinRow4[T1: ResultSetMapper, T2: ResultSetMapper, T3: ResultSetMapper, T4: ResultSetMapper](sql: SQLWithArgs): Option[(T1, T2, T3, T4)] = withPreparedStatement(sql.sql) { prepared =>
       setStatementArgs(prepared, sql.args)
 
-      LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
+      if(LOG.isDebugEnabled) LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
 
@@ -255,20 +254,19 @@ given ConnectionOps with
         val t4 = summon[ResultSetMapper[T4]].from(rs)
         result = Some(Tuple4(t1, t2, t3, t4))
         if (rs.next())
-          LOG.warn("expect 1 row but has more")
+          if(LOG.isWarnEnabled) LOG.warn("expect 1 row but has more")
         else
-          LOG.debug("SQL result: 1")
+          if(LOG.isDebugEnabled) LOG.debug("SQL result: 1")
       else
-        LOG.debug("SQL result: 0")
+        if(LOG.isDebugEnabled) LOG.debug("SQL result: 0")
 
       result
     }
 
     def queryInt(sql: SQLWithArgs): Int = withPreparedStatement(sql.sql) { prepared =>
-      //    val prepared = conn.prepareStatement(sql.sql)
       setStatementArgs(prepared, sql.args)
 
-      LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
+      if(LOG.isDebugEnabled) LOG.debug("SQL Preparing: {} args: {}", Seq(sql.sql, sql.args): _*)
 
       val rs = prepared.executeQuery().nn
 
