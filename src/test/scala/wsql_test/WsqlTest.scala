@@ -11,10 +11,10 @@ class WsqlTest extends AnyFunSuite {
 
   test("jdbc types") {
       dataSource.withStatement { stmt =>
-        val rs = stmt.executeQuery("select * from test1")
+        val rs = stmt.executeQuery("select * from test1").nn
         while (rs.next) {
           assert(rs.get[Int]("id") == 1)
-          assert(rs.get[String]("name") == "test1")
+          assert(rs.get[String|Null]("name") == "test1")
           assert(rs.get[Boolean]("is_active") == true)
           assert(rs.get[Byte]("tiny_int") == 1)
           assert(rs.get[Short]("small_int") == 500)
@@ -26,8 +26,8 @@ class WsqlTest extends AnyFunSuite {
           assert(rs.get[java.sql.Date]("birthday") == java.sql.Date.valueOf("2020-01-01"))
           assert(rs.get[java.sql.Timestamp]("created_at") == java.sql.Timestamp.valueOf("2020-01-01 00:00:00"))
           assert(rs.get[java.sql.Timestamp]("updated_at") == java.sql.Timestamp.valueOf("2020-01-01 00:00:00"))
-          assert(rs.get[Array[Byte]]("blob_value").toList == "test".getBytes.toList)
-          assert(rs.get[String]("empty_value") == null)
+          assert(rs.get[Array[Byte]]("blob_value").toList == "test".getBytes.nn.toList)
+          assert(rs.get[String|Null]("empty_value") == null)
           assert(rs.get[Int]("empty_int") == 0)
 
           assert( rs.get[Int](1) == 1)
@@ -43,8 +43,9 @@ class WsqlTest extends AnyFunSuite {
           assert( rs.get[java.sql.Date](11) == java.sql.Date.valueOf("2020-01-01"))
           assert( rs.get[java.sql.Timestamp](12) == java.sql.Timestamp.valueOf("2020-01-01 00:00:00"))
           assert( rs.get[java.sql.Timestamp](13) == java.sql.Timestamp.valueOf("2020-01-01 00:00:00"))
-          assert( rs.get[Array[Byte]](14).toList == "test".getBytes.toList)
-          assert( rs.get[String](15) == null)
+          assert( rs.get[Array[Byte]](14).toList == "test".getBytes.nn.toList)
+
+          assert( rs.get[String|Null](15) == null)
           assert( rs.get[Int](16) == 0)
 
           assert( rs.get[Option[Int]](1) == Some(1))
@@ -73,8 +74,8 @@ class WsqlTest extends AnyFunSuite {
       assert(row.get[java.sql.Date]("birthday") == java.sql.Date.valueOf("2020-01-01"))
       assert(row.get[java.sql.Timestamp]("created_at") == java.sql.Timestamp.valueOf("2020-01-01 00:00:00"))
       assert(row.get[java.sql.Timestamp]("updated_at") == java.sql.Timestamp.valueOf("2020-01-01 00:00:00"))
-      assert(row.get[Array[Byte]]("blob_value").toList == "test".getBytes.toList)
-      assert(row.get[String]("empty_value") == null)
+      assert(row.get[Array[Byte]]("blob_value").toList == "test".getBytes.nn.toList)
+      assert(row.get[String|Null]("empty_value") == null)
       assert(row.get[Int]("empty_int") == 0)
 
       assert( row.get[Int](1) == 1)
@@ -90,8 +91,8 @@ class WsqlTest extends AnyFunSuite {
       assert( row.get[java.sql.Date](11) == java.sql.Date.valueOf("2020-01-01"))
       assert( row.get[java.sql.Timestamp](12) == java.sql.Timestamp.valueOf("2020-01-01 00:00:00"))
       assert( row.get[java.sql.Timestamp](13) == java.sql.Timestamp.valueOf("2020-01-01 00:00:00"))
-      assert( row.get[Array[Byte]](14).toList == "test".getBytes.toList)
-      assert( row.get[String](15) == null)
+      assert( row.get[Array[Byte]](14).toList == "test".getBytes.nn.toList)
+      assert( row.get[String|Null](15) == null)
       assert( row.get[Int](16) == 0)
 
       assert( row.get[Option[Int]](1) == Some(1))
@@ -123,8 +124,9 @@ class WsqlTest extends AnyFunSuite {
         createdAt: java.sql.Timestamp,
         updatedAt: java.sql.Timestamp,
         blobValue: Array[Byte],
-        emptyValue: Option[String],
-        emptyInt: Option[Int])  derives ResultSetMapper
+        emptyValue: String|Null,   // or using Option[String]
+        emptyInt: Int|Null // or using Option[Int]
+     )  derives ResultSetMapper
 
     val mapper = summon[ResultSetMapper[Test1]]
     val rows = dataSource.rows[Test1]("select * from test1")
@@ -141,12 +143,12 @@ class WsqlTest extends AnyFunSuite {
         floatValue = 1.1f,
         doubleValue = 2.2,
         decimalValue = BigDecimal("3.30"),
-        birthday = java.sql.Date.valueOf("2020-01-01"),
-        createdAt = java.sql.Timestamp.valueOf("2020-01-01 00:00:00"),
-        updatedAt = java.sql.Timestamp.valueOf("2020-01-01 00:00:00"),
+        birthday = java.sql.Date.valueOf("2020-01-01").nn,
+        createdAt = java.sql.Timestamp.valueOf("2020-01-01 00:00:00").nn,
+        updatedAt = java.sql.Timestamp.valueOf("2020-01-01 00:00:00").nn,
         blobValue = rows(0).blobValue,  // "test".getBytes,
-        emptyValue = None,
-        emptyInt = None)
+        emptyValue = null,
+        emptyInt = null)
     )
   }
 
@@ -155,8 +157,8 @@ class WsqlTest extends AnyFunSuite {
         id: Int,
         name: String,
         is_active: Boolean,
-        tiny_int2: Option[Byte], // missed field
-        small_int2: Short = 10 // missed field
+        tiny_int2: Option[Byte], // missed field, can't be Byte | Null
+        small_int2: Short = 10 // missed field can have a default value
         ) derives ResultSetMapper
 
     val rows = dataSource.rows[Test2]("select * from test1")
@@ -183,7 +185,7 @@ class WsqlTest extends AnyFunSuite {
       val rows = dataSource.rows[Test3]("select * from test1")
     }
 //    println("caught: " + caught.getMessage)
-    assert(caught.getMessage contains """Column "small_int2" not found """)
+    assert(caught.getMessage.nn contains """Column "small_int2" not found """)
   }
 
 }

@@ -1,10 +1,10 @@
-package wsql
+package wsql.macros
 
 import java.sql.*
 import scala.quoted.*
+import wsql.*
 
-// TODO refact code from experience of wjson
-object ResultSetMapperMacro:
+object ResultSetMapperMacros:
 
   inline def resultSetMapper[T] = ${resultSetMapperImpl[T]}
 
@@ -24,7 +24,7 @@ object ResultSetMapperMacro:
                   // println("x: " + x.show + " t: " + TypeTree.of[t].show)
                   TypeRepr.of[t].widen.asInstanceOf[AppliedType] match
                     case AppliedType(base, List(clazz)) =>
-                      Class.forName(clazz.widen.show).newInstance().asInstanceOf[CaseClassColumnMapper]
+                      Class.forName(clazz.widen.show).nn.newInstance().asInstanceOf[CaseClassColumnMapper]
         case None => IdentityMapping()
 
     val defaultParams: Map[String, Expr[Any]] =
@@ -54,12 +54,16 @@ object ResultSetMapperMacro:
             case Some(accessor) =>
               Type.of[t] match
                 case '[Option[t2]] => // Option[Int] ->
-//                  val a = defaultParams.get(name) //
                   val primitive = isPrimitive(TypeRepr.of[t2])
                   val defaultExpr: Expr[Option[t2]] = defaultParams.get(name) match  // Option(Expr[Option[t2]])
                     case Some(deff) =>  '{ ${deff}.asInstanceOf[Option[t2]] } // deff maybe Expr[None] also
                     case None => '{ None }
-                  '{ withDefaultOption[t2](${Expr(columnName)}, ${Expr(primitive)}, ${defaultExpr}, $rs)(using ${Expr.summon[JdbcValueAccessor[t2]].get}) }
+
+                  // TODO prompt for summon value not exists
+                  if(primitive)
+                    '{ withDefaultOptionAnyVal[t2](${Expr(columnName)}, ${defaultExpr}, $rs)(using ${Expr.summon[JdbcValueAccessor[t2]].get}) }
+                  else
+                    '{ withDefaultOptionAnyRef[t2](${Expr(columnName)}, ${defaultExpr}, $rs)(using ${Expr.summon[JdbcValueAccessor[t2|Null]].get}) }
 
                 case _ => // String
                   val (defaultExpr:Expr[Option[t]], none) = defaultParams.get(name) match

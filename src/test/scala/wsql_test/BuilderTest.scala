@@ -27,7 +27,7 @@ class BuilderTest extends AnyFunSuite {
     given Conversion[Int, String] with
       override def apply(x: Int): String = Integer.toString(x)
 
-    case class PersonA(name: String, age: String, address: AddressA)
+    case class PersonA(name: String, age: String|Null, address: AddressA)
     case class AddressA(street: String, city: String)
 
     case class PersonB(name: String, age: Option[Int], address: AddressB)

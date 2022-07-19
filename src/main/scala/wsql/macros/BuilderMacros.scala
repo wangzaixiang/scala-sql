@@ -1,10 +1,10 @@
-package wsql
+package wsql.macros
 
 import scala.quoted.*
 import java.sql.Connection
 import scala.deriving.Mirror
 
-object Macros {
+object BuilderMacros {
 
   def defaultParamsForCaseClass[T: Type](using Quotes): Map[String, Expr[Any]] =
     import quotes.reflect._
@@ -18,13 +18,6 @@ object Macros {
       yield module.select(deff.symbol).asExpr
 
     names.zip(idents).toMap
-
-  def createBatchImpl[T: Type](proc: Expr[T=>SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
-    '{ null }
-
-  def createMysqlBatchImpl[T: Type](proc: Expr[T=>SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
-    '{ null }
-
 
   // tryBuild[ String, Int ]
   // TODO process self-reference

@@ -6,11 +6,12 @@ version := "3.0.0"
 
 scalaVersion := "3.1.3"
 
-// scalacOptions := Seq( "-Yexplicit-nulls" )
+scalacOptions := Seq( "-Yexplicit-nulls" )
 
 libraryDependencies ++= Seq(
   "org.slf4j" % "slf4j-api" % "1.7.9",
-  "com.github.jsqlparser" % "jsqlparser" % "1.2",
+  "com.github.jsqlparser" % "jsqlparser" % "1.2" % "provided",
+  // "org.scala-lang" %% "scala3-compiler" % scalaVersion.value,
 
   "com.h2database" % "h2" % "1.4.184" % "test",
   "junit" % "junit" % "4.12" % "test",

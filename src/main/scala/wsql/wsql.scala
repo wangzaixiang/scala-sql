@@ -1,16 +1,15 @@
 package wsql
 
-import ResultSetMapperMacro.resultSetMapperImpl
-
 import javax.sql.DataSource
-import java.sql.{Blob, Clob, Connection, PreparedStatement, ResultSet, Statement, Timestamp}
+import java.sql.{Connection, Statement, PreparedStatement, ResultSet, Types, SQLException, Timestamp, Clob, Blob}
 import java.util.Date
 import scala.annotation.StaticAnnotation
+import wsql.macros.*
 
 /**
   * wrap a sql"select * from table where id = $id" object
   */
-case class SQLWithArgs(sql: String, args: Seq[JdbcValue[?]]):
+case class SQLWithArgs(sql: String, args: Seq[JdbcValue[?]|Null]):
 
   def +(other: SQLWithArgs): SQLWithArgs =
     SQLWithArgs(sql + other.sql, args ++ other.args)
@@ -47,20 +46,40 @@ trait JdbcValueAccessor[T]:
 object JdbcValueAccessor:
   def apply[T](using v: JdbcValueAccessor[T]): JdbcValueAccessor[T] = v
 
-  given [T: JdbcValueAccessor]: JdbcValueAccessor[Option[T]] with //new JdbcValueAccessor_Option[T]
+
+  given _opt_nn [T <: AnyVal](using JdbcValueAccessor[T]): JdbcValueAccessor[Option[T]] with //new JdbcValueAccessor_Option[T]
     inline def passIn(stmt: PreparedStatement, index: Int, value: Option[T]): Unit = value match
       case Some(t) => summon[JdbcValueAccessor[T]].passIn(stmt, index, t)
-      case None => stmt.setObject(index, null) // TODO or setNull
+      case None => stmt.setObject(index, null)
 
     inline def passOut(rs: ResultSet, index: Int): Option[T] =
-      if (rs.getObject(index) == null) None
-      else
-        Some(summon[JdbcValueAccessor[T]].passOut(rs, index))
+      if(rs.getObject(index) == null) None
+      else Some( summon[JdbcValueAccessor[T]].passOut(rs, index) )
 
     inline def passOut(rs: ResultSet, name: String): Option[T] =
-      if (rs.getObject(name) == null) None
-      else
-        Some(summon[JdbcValueAccessor[T]].passOut(rs, name))
+      if(rs.getObject(name) == null) None
+      else Some( summon[JdbcValueAccessor[T]].passOut(rs, name) )
+
+
+  given _opt_null [T <: AnyRef](using JdbcValueAccessor[T|Null]): JdbcValueAccessor[Option[T]] with //new JdbcValueAccessor_Option[T]
+    inline def passIn(stmt: PreparedStatement, index: Int, value: Option[T]): Unit = value match
+      case Some(t) => summon[JdbcValueAccessor[T]].passIn(stmt, index, t)
+      case None => stmt.setObject(index, null)
+
+    inline def passOut(rs: ResultSet, index: Int): Option[T] =
+      summon[JdbcValueAccessor[T|Null]].passOut(rs, index) match
+        case x: T@unchecked => Some(x)
+        case null => None
+
+    inline def passOut(rs: ResultSet, name: String): Option[T] =
+      summon[JdbcValueAccessor[T|Null]].passOut(rs, name) match
+        case x: T@unchecked => Some(x)
+        case null => None
+
+  given JdbcValueAccessor[Null] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: Null): Unit = stmt.setNull(index, Types.CHAR)
+    inline def passOut(rs: ResultSet, index: Int): Null = null
+    inline def passOut(rs: ResultSet, name: String): Null = null
 
   given JdbcValueAccessor[Boolean] with
     inline def passIn(stmt: PreparedStatement, index: Int, value: Boolean): Unit = stmt.setBoolean(index, value)
@@ -97,61 +116,88 @@ object JdbcValueAccessor:
     inline def passOut(rs: ResultSet, index: Int): Double = rs.getDouble(index)
     inline def passOut(rs: ResultSet, name: String): Double = rs.getDouble(name)
 
-  given JdbcValueAccessor[String] with
-    inline def passIn(stmt: PreparedStatement, index: Int, value: String): Unit = stmt.setString(index, value)
-    inline def passOut(rs: ResultSet, index: Int): String = rs.getString(index)
-    inline def passOut(rs: ResultSet, name: String): String = rs.getString(name)
+  given JdbcValueAccessor[String|Null] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: String|Null): Unit = stmt.setString(index, value)
+    inline def passOut(rs: ResultSet, index: Int): String|Null = rs.getString(index)
+    inline def passOut(rs: ResultSet, name: String): String|Null = rs.getString(name)
 
-  given JdbcValueAccessor[java.math.BigDecimal] with
-    inline def passIn(stmt: PreparedStatement, index: Int, value: java.math.BigDecimal): Unit = stmt.setBigDecimal(index, value)
-    inline def passOut(rs: ResultSet, index: Int): java.math.BigDecimal = rs.getBigDecimal(index)
-    inline def passOut(rs: ResultSet, name: String): java.math.BigDecimal = rs.getBigDecimal(name)
+  given jva_bd0: JdbcValueAccessor[java.math.BigDecimal|Null] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: java.math.BigDecimal|Null): Unit =
+      stmt.setBigDecimal(index, value)
+    inline def passOut(rs: ResultSet, index: Int): java.math.BigDecimal|Null = rs.getBigDecimal(index)
+    inline def passOut(rs: ResultSet, name: String): java.math.BigDecimal|Null = rs.getBigDecimal(name)
 
-  given JdbcValueAccessor[java.util.Date] with
-    inline def passIn(stmt: PreparedStatement, index: Int, value: Date): Unit = stmt.setTimestamp(index, new Timestamp(value.getTime))
-    inline def passOut(rs: ResultSet, index: Int): Date = rs.getTimestamp(index) match
+  given _jva_date0: JdbcValueAccessor[java.util.Date|Null] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: Date|Null): Unit =
+      if(value == null) stmt.setTimestamp(index, null)
+      else stmt.setTimestamp(index, new Timestamp(value.getTime))
+    inline def passOut(rs: ResultSet, index: Int): Date|Null = rs.getTimestamp(index) match
       case x: Timestamp => new Date(x.getTime)
       case null => null
 
-    inline def passOut(rs: ResultSet, name: String): Date = rs.getTimestamp(name) match
+    inline def passOut(rs: ResultSet, name: String): Date|Null = rs.getTimestamp(name) match
       case x: Timestamp => new Date(x.getTime)
       case null => null
 
-  given _jva_date: JdbcValueAccessor[java.sql.Date] with
-    inline def passIn(stmt: PreparedStatement, index: Int, value: java.sql.Date): Unit = stmt.setDate(index, value)
-    inline def passOut(rs: ResultSet, index: Int): java.sql.Date = rs.getDate(index)
-    inline def passOut(rs: ResultSet, name: String): java.sql.Date = rs.getDate(name)
+  given _jva_date2: JdbcValueAccessor[java.sql.Date|Null] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: java.sql.Date|Null): Unit = stmt.setDate(index, value)
+    inline def passOut(rs: ResultSet, index: Int): java.sql.Date|Null = rs.getDate(index)
+    inline def passOut(rs: ResultSet, name: String): java.sql.Date|Null = rs.getDate(name)
 
-  given JdbcValueAccessor[Timestamp] with
-    inline def passIn(stmt: PreparedStatement, index: Int, value: Timestamp): Unit = stmt.setTimestamp(index, value)
-    inline def passOut(rs: ResultSet, index: Int): Timestamp = rs.getTimestamp(index)
-    inline def passOut(rs: ResultSet, name: String): Timestamp = rs.getTimestamp(name)
+  given _jva_ts0: JdbcValueAccessor[Timestamp|Null] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: Timestamp|Null): Unit = stmt.setTimestamp(index, value)
+    inline def passOut(rs: ResultSet, index: Int): Timestamp|Null = rs.getTimestamp(index)
+    inline def passOut(rs: ResultSet, name: String): Timestamp|Null = rs.getTimestamp(name)
 
-  given _jva_bd: JdbcValueAccessor[BigDecimal] with
-    inline def passIn(stmt: PreparedStatement, index: Int, value: BigDecimal): Unit = stmt.setBigDecimal(index, value.bigDecimal)
-    inline def passOut(rs: ResultSet, index: Int): BigDecimal =
+  given _jva_bd: JdbcValueAccessor[BigDecimal|Null] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: BigDecimal|Null): Unit =
+      if(value == null) stmt.setBigDecimal(index, null)
+      else stmt.setBigDecimal(index, value.bigDecimal)
+    inline def passOut(rs: ResultSet, index: Int): BigDecimal|Null =
       val it = rs.getBigDecimal(index);
       if (it != null) BigDecimal(it) else null
-
-    inline def passOut(rs: ResultSet, name: String): BigDecimal =
+    inline def passOut(rs: ResultSet, name: String): BigDecimal|Null =
       val it = rs.getBigDecimal(name);
       if (it != null) BigDecimal(it) else null
 
-  given JdbcValueAccessor[Array[Byte]] with
-    inline def passIn(stmt: PreparedStatement, index: Int, value: Array[Byte]): Unit = stmt.setBytes(index, value)
-    inline def passOut(rs: ResultSet, index: Int): Array[Byte] = rs.getBytes(index)
-    inline def passOut(rs: ResultSet, name: String): Array[Byte] = rs.getBytes(name)
+  given _jva_array0: JdbcValueAccessor[Array[Byte]|Null] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: Array[Byte]|Null): Unit = stmt.setBytes(index, value)
+    inline def passOut(rs: ResultSet, index: Int): Array[Byte]|Null = rs.getBytes(index)
+    inline def passOut(rs: ResultSet, name: String): Array[Byte]|Null = rs.getBytes(name)
 
-  given JdbcValueAccessor[Blob] with
-    inline def passIn(stmt: PreparedStatement, index: Int, value: Blob): Unit = stmt.setBlob(index, value)
-    inline def passOut(rs: ResultSet, index: Int): Blob = rs.getBlob(index)
-    inline def passOut(rs: ResultSet, name: String): Blob = rs.getBlob(name)
+  given _jva_blob0: JdbcValueAccessor[Blob|Null] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: Blob|Null): Unit = stmt.setBlob(index, value)
+    inline def passOut(rs: ResultSet, index: Int): Blob|Null = rs.getBlob(index)
+    inline def passOut(rs: ResultSet, name: String): Blob|Null = rs.getBlob(name)
 
-  given JdbcValueAccessor[Clob] with
-    inline def passIn(stmt: PreparedStatement, index: Int, value: Clob): Unit = stmt.setClob(index, value)
-    inline def passOut(rs: ResultSet, index: Int): Clob = rs.getClob(index)
-    inline def passOut(rs: ResultSet, name: String): Clob = rs.getClob(name)
+  given _jva_clob0: JdbcValueAccessor[Clob|Null] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: Clob|Null): Unit = stmt.setClob(index, value)
+    inline def passOut(rs: ResultSet, index: Int): Clob|Null = rs.getClob(index)
+    inline def passOut(rs: ResultSet, name: String): Clob|Null = rs.getClob(name)
 
+  /**
+   * provide JdbcValueAccessor for T where T is an reference type
+   */
+  given _nn[T <: AnyRef](using JdbcValueAccessor[T|Null]): JdbcValueAccessor[T] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: T): Unit = summon[JdbcValueAccessor[T|Null]].passIn(stmt, index, value)
+    inline def passOut(rs: ResultSet, index: Int): T = summon[JdbcValueAccessor[T|Null]].passOut(rs, index).nn
+    inline def passOut(rs: ResultSet, name: String): T = summon[JdbcValueAccessor[T|Null]].passOut(rs, name).nn
+
+  /**
+   * provide JdbcValueAccessor for T|Null where T is a primitive type
+   */
+  given _null[ T<: AnyVal](using JdbcValueAccessor[T]): JdbcValueAccessor[T|Null] with
+    inline def passIn(stmt: PreparedStatement, index: Int, value: T|Null): Unit =
+      if(value == null) stmt.setNull(index, java.sql.Types.VARCHAR)
+      else summon[JdbcValueAccessor[T]].passIn(stmt, index, value)
+
+    inline def passOut(rs: ResultSet, index: Int): T|Null =
+      val it = summon[JdbcValueAccessor[T]].passOut(rs, index);
+      if(rs.wasNull) null else it
+
+    inline def passOut(rs: ResultSet, name: String): T|Null =
+      val it = summon[JdbcValueAccessor[T]].passOut(rs, name);
+      if(rs.wasNull) null else it
 
 /**
   * any record level(a table row) having a ResultSetMapper context bound can used in `rows[T](sql)`
@@ -174,8 +220,8 @@ trait ResultSetMapper[T]:
   def from(rs: ResultSet): T
 
 object ResultSetMapper:
-  inline given material[T: deriving.Mirror.ProductOf]: ResultSetMapper[T] = ${ ResultSetMapperMacro.resultSetMapperImpl[T] }
-  inline def derived[T: deriving.Mirror.ProductOf]: ResultSetMapper[T] = ${ ResultSetMapperMacro.resultSetMapperImpl[T] }
+  inline given material[T: deriving.Mirror.ProductOf]: ResultSetMapper[T] = ${ ResultSetMapperMacros.resultSetMapperImpl[T] }
+  inline def derived[T: deriving.Mirror.ProductOf]: ResultSetMapper[T] = ${ ResultSetMapperMacros.resultSetMapperImpl[T] }
 
   given ResultSetMapper[Boolean] with
     def from(rs: ResultSet): Boolean = rs.getBoolean(1)
@@ -198,23 +244,26 @@ object ResultSetMapper:
   given ResultSetMapper[Double] with
     def from(rs: ResultSet): Double = rs.getDouble(1)
 
-  given ResultSetMapper[String] with
-    def from(rs: ResultSet): String = rs.getString(1)
+  given ResultSetMapper[String|Null] with
+    def from(rs: ResultSet): String|Null = rs.getString(1)
 
-  given ResultSetMapper[java.math.BigDecimal] with
-    def from(rs: ResultSet): java.math.BigDecimal = rs.getBigDecimal(1)
+  given _rsm_bd0: ResultSetMapper[java.math.BigDecimal|Null] with
+    def from(rs: ResultSet): java.math.BigDecimal|Null = rs.getBigDecimal(1)
 
-  given ResultSetMapper[java.util.Date] with
-    override def from(rs: ResultSet): Date = new java.util.Date(rs.getTimestamp(1).getTime)
+  given _rsm_date0: ResultSetMapper[java.util.Date|Null] with
+    override def from(rs: ResultSet): Date|Null =
+     rs.getTimestamp(1) match
+       case x: Timestamp => new java.util.Date(x.getTime.nn)
+       case null => null
 
-  given _rsm_date: ResultSetMapper[java.sql.Date] with
-    def from(rs: ResultSet): java.sql.Date = rs.getDate(1)
+  given _rsm_date: ResultSetMapper[java.sql.Date|Null] with
+    def from(rs: ResultSet): java.sql.Date|Null = rs.getDate(1)
 
-  given ResultSetMapper[Timestamp] with
-    def from(rs: ResultSet): Timestamp = rs.getTimestamp(1)
+  given _rsm_ts_0: ResultSetMapper[Timestamp|Null] with
+    def from(rs: ResultSet): Timestamp|Null = rs.getTimestamp(1)
 
-  given _rsm_bd: ResultSetMapper[BigDecimal] with
-    def from(rs: ResultSet): BigDecimal =
+  given _rsm_bd: ResultSetMapper[BigDecimal|Null] with
+    def from(rs: ResultSet): BigDecimal|Null =
       val it = rs.getBigDecimal(1);
       if (it != null) BigDecimal(it) else null
 
@@ -226,13 +275,14 @@ object JdbcValue:
   given [T: JdbcValueAccessor]: Conversion[T, JdbcValue[T]] with
     override def apply(t: T) = JdbcValue(t)
 
-  // implicit def convert1[T](t: T) = JdbcValue(t)
+  given _nn [T <: AnyVal: JdbcValueAccessor]: Conversion[Option[T], JdbcValue[Option[T]]] with
+    override def apply(t: Option[T]) = JdbcValue(t)(using summon[JdbcValueAccessor[Option[T]]])
 
-  given [T: JdbcValueAccessor]: Conversion[Option[T], JdbcValue[Option[T]]] with
-    override def apply(t: Option[T]) = JdbcValue(t)(summon[JdbcValueAccessor[Option[T]]])
+  given _null [T <: AnyRef](using JdbcValueAccessor[T|Null]): Conversion[Option[T], JdbcValue[Option[T]]] with
+    override def apply(t: Option[T]) = JdbcValue(t)(using summon[JdbcValueAccessor[Option[T]]])
 
 extension (sc: StringContext)
-  def sql(args: JdbcValue[_]*) = SQLWithArgs(sc.parts.mkString("?"), args)
+  def sql(args: JdbcValue[?]|Null *) = SQLWithArgs(sc.parts.mkString("?"), args)
 
   /**
     * SQL"" will validate the sql statement at compiler time.
@@ -249,7 +299,7 @@ extension (rs: ResultSet)
   inline def get[T: JdbcValueAccessor](label: String): T = summon[JdbcValueAccessor[T]].passOut(rs, label)
 
   inline def getOption[T: JdbcValueAccessor](index: Int): Option[T] =
-    if (rs.getObject(index) == null) None else Some(summon[JdbcValueAccessor[T]].passOut(rs, index))
+    if (rs.getObject(index) == null) None else Some(summon[JdbcValueAccessor[T]].passOut(rs, index).nn)
 
 /**
  * currently, only classes supprt, dont support object yet.
@@ -298,24 +348,33 @@ private inline def withDefault[T:JdbcValueAccessor](inline name:String, inline p
 private inline def withoutDefault[T:JdbcValueAccessor](inline name: String, rs: ResultSet): T =
     rs.get[T](name)
 
-private inline def withDefaultOption[T:JdbcValueAccessor](inline name:String, inline primtive:Boolean, inline deff: Option[T], rs: ResultSet): Option[T] =
+private inline def withDefaultOptionAnyVal[T](inline name:String, inline deff: Option[T], rs: ResultSet)
+                                       (using JdbcValueAccessor[T]): Option[T] =
   try
     val v = rs.get[T](name)
-    inline if primtive then
-    if rs.wasNull then deff else Some(v)
-    else
-      if v == null then deff else Some(v)
+    if rs.wasNull then deff else Some(v.nn)
   catch
-    case ex: java.sql.SQLException => deff
+    case ex: SQLException => deff
+
+private inline def withDefaultOptionAnyRef[T](inline name:String, inline deff: Option[T], rs: ResultSet)
+                                                (using JdbcValueAccessor[T|Null]): Option[T] =
+  try
+    val v = rs.get[T|Null](name)
+    if v == null then deff else Some(v.nn)
+  catch
+    case ex: SQLException => deff
+
+object NoopProcessor extends Function1[Any, Unit]:
+  def apply(rs: Any): Unit = ()
 
 trait ConnectionOps:
   extension (conn: Connection)
     def withStatement[T](f: Statement => T): T
     def withTransaction[T](f: Connection=>T): T
-    inline def createBatch[T](proc: T=>SQLWithArgs): Batch[T]
-    inline def createMysqlBatch[T](proc: T=>SQLWithArgs): Batch[T]
+    inline def createBatch[T](inline proc: T=>SQLWithArgs): Batch[T]
+    inline def createMysqlBatch[T](inline proc: T=>SQLWithArgs): Batch[T]
     def executeUpdate(stmt: SQLWithArgs): Int
-    def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(proc: ResultSet=>Unit = null): Int
+    def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(proc: ResultSet=>Unit = NoopProcessor): Int
     def generateKey[T: JdbcValueAccessor](stmt: SQLWithArgs): T
     def eachRow[T: ResultSetMapper](sql: SQLWithArgs)(f: T=>Unit): Unit
     def rows[T: ResultSetMapper](sql:SQLWithArgs): List[T]
@@ -335,7 +394,7 @@ trait DataSourceOps:
     inline def createBatch[T](proc: T=>SQLWithArgs): Batch[T]
     inline def createMysqlBatch[T](proc: T=>SQLWithArgs): Batch[T]
     def executeUpdate(stmt: SQLWithArgs): Int
-    def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(processGenerateKeys: ResultSet=>Unit = null): Int
+    def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(processGenerateKeys: ResultSet=>Unit = NoopProcessor): Int
     def generateKey[T: JdbcValueAccessor](stmt: SQLWithArgs): T
     def eachRow[T: ResultSetMapper](sql: SQLWithArgs)(f: T=>Unit): Unit
     def rows[T: ResultSetMapper](sql:SQLWithArgs): List[T]
