@@ -37,13 +37,13 @@ given ConnectionOps with
           throw ex
 
     inline def createBatch[T](inline proc: T => SQLWithArgs): Batch[T] =
-      ${ BatchMacros.createBatchImpl[T]('proc, 'conn) }
+      ${ BatchMacros.createBatchImpl[T]('proc, 'conn, false) }
 
     /**
       * translate the "insert into table set a = ?, b = ?" into "insert into table(a,b) values(?,?)
       */
-    inline def createMysqlBatch[T](proc: T => SQLWithArgs): Batch[T] =
-      ${ BatchMacros.createMysqlBatchImpl[T]('proc, 'conn) }
+    inline def createMysqlBatch[T](inline proc: T => SQLWithArgs): Batch[T] =
+      ${ BatchMacros.createBatchImpl[T]('proc, 'conn, true) }
 
     def executeUpdate(stmt: SQLWithArgs): Int = executeUpdateWithGenerateKey(stmt)(NoopProcessor)
 

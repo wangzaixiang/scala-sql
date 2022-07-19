@@ -1,8 +1,12 @@
 package wsql.macros
 
+import net.sf.jsqlparser.expression.operators.relational.ExpressionList
+import net.sf.jsqlparser.parser.CCJSqlParserUtil
+import net.sf.jsqlparser.statement.insert.Insert
+
 import java.sql.Connection
 import scala.quoted.{Expr, Quotes, Type}
-import wsql.{Batch, SQLWithArgs}
+import wsql.{Batch, JdbcValue, SQLWithArgs}
 
 object BatchMacros {
 
@@ -32,17 +36,28 @@ object BatchMacros {
         sc match
           case Apply(Apply(sql, List(Apply(scApply, List(Typed(Repeated(sqls,_),_)) ))), _) =>
             sqls.map{ case Literal(StringConstant(s)) => s }.mkString("?")
+          case Apply(Select(Ident("SQLWithArgs"), "apply"),
+            List(Literal(StringConstant(s)), _) ) => s
+          case _ => throw new RuntimeException(s"""expect sql"statement" or SQLWithArgs(literal, args)""")
 
   private def extractJdbcValues(using quotes:Quotes)(apply: quotes.reflect.Apply): quotes.reflect.Apply =
     import quotes.reflect.*
-    apply match
-      case Apply(sc, args) =>
-        Apply(
-          TypeApply(
-            Select.unique(Ref(Symbol.requiredModule("scala.collection.immutable.List")), "apply"),
-            List(TypeTree.of[wsql.JdbcValue[?] | Null])
-          ), args
-        )
+
+    val args = apply match
+      case Apply( Apply( id@Ident("sql"), List(stringContext)), args) if(id.symbol == Symbol.requiredMethod("wsql.sql")) =>
+        args
+      case Apply(Select(sqlWithArgs, "apply"), List(sql_stat, Apply(seqApply, args) )) if sqlWithArgs.tpe =:= TypeRepr.of[SQLWithArgs.type ] =>
+        args
+      case _ =>
+        println(apply.show(using Printer.TreeStructure))
+        throw new RuntimeException("""support sql"..." or SqlWithArgs(sql, args) only""")
+
+    Apply(
+      TypeApply(
+        Select.unique(Ref(Symbol.requiredModule("scala.collection.immutable.List")), "apply"),
+        List(TypeTree.of[wsql.JdbcValue[?] | Null])
+      ), args
+    )
 
   private def buildLambdaOfJdbcValues[T: Type](using quotes: Quotes)(lambdaOfSqlWithArgs: quotes.reflect.Term): quotes.reflect.Term =
     import quotes.reflect.*
@@ -79,21 +94,36 @@ object BatchMacros {
         Block(newStats, extract2)
 
 
-  def createBatchImpl[T: Type](proc: Expr[T => SQLWithArgs], conn: Expr[Connection])(using quotes: Quotes): Expr[Batch[T]] =
+  def createBatchImpl[T: Type](proc: Expr[T => SQLWithArgs],
+                               conn: Expr[Connection],
+                               convertMySqlInsert: Boolean
+                              )(using quotes: Quotes): Expr[Batch[T]] =
     import quotes.reflect.*
 
     proc.asTerm match
       case Inlined(_, _, Block(Nil, lambdaOfSqlWithArgs)) =>
         val lambda = buildLambdaOfJdbcValues(lambdaOfSqlWithArgs)
         val sql = extractSql(lambdaOfSqlWithArgs)
-        buildBatchExpr(conn, sql, lambda)
+        val rewrited = if convertMySqlInsert then rewriteMySQLInsert(sql) else sql
+        buildBatchExpr(conn, rewrited, lambda)
 
       case _ =>
         ???
 
+  private def rewriteMySQLInsert(stmt: String): String =
+    val insert: Insert = CCJSqlParserUtil.parse(stmt).asInstanceOf[Insert]
 
-  def createMysqlBatchImpl[T: Type](proc: Expr[T => SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
-    '{???}
+    assert(insert.getSelect == null, "not support insert .. select ... statement")
+    if(insert.isUseSet)
+      val columns = insert.getSetColumns.nn
+      val itemsList = insert.getSetExpressionList
+      insert.setSetColumns(null)
+      insert.setSetExpressionList(null)
+      insert.setUseSet(false)
 
+      insert.setUseValues(true)
+      insert.setColumns(columns)
+      insert.setItemsList(new ExpressionList(itemsList))
+    insert.toString
 
 }
