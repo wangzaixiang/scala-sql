@@ -2,7 +2,7 @@ organization := "com.github.wangzaixiang"
 
 name := "wsql"
 
-version := "3.0.0"
+version := "3.0.0-RC1"
 
 scalaVersion := "3.1.3"
 
