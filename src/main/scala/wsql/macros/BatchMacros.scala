@@ -8,10 +8,10 @@ object BatchMacros {
 
   type ListOfJdbcValues = List[wsql.JdbcValue[?]|Null]
 
-  private def buildBatchExpr[T: Type](using quotes: Quotes)(conn: Expr[Connection], arg2JdbcValuesLambda: quotes.reflect.Term): Expr[Batch[T]] =
+  private def buildBatchExpr[T: Type](using quotes: Quotes)(conn: Expr[Connection], sql: String, arg2JdbcValuesLambda: quotes.reflect.Term): Expr[Batch[T]] =
     import quotes.reflect.*
 
-    val funcTpt = TypeTree.of[ Function1[T, ListOfJdbcValues ] ]
+    val funcTpt = TypeTree.of[ (T) => ListOfJdbcValues ]
     val symbolFunc = Symbol.newVal(Symbol.spliceOwner, "func", funcTpt.tpe, Flags.EmptyFlags, Symbol.noSymbol)
 
     val valdef = ValDef(symbolFunc, Some(arg2JdbcValuesLambda))
@@ -19,7 +19,7 @@ object BatchMacros {
       TypeApply(Select.unique(Ref(Symbol.requiredModule("wsql.BatchImpl")), "apply"),
         List(TypeTree.of[T])
       ),
-      List(conn.asTerm, Literal(StringConstant("select stmt")),  // TODO
+      List(conn.asTerm, Literal(StringConstant(sql)),  // TODO
         Ref(symbolFunc)
       )
     )
@@ -27,11 +27,21 @@ object BatchMacros {
 
     expr.asExpr.asInstanceOf[Expr[Batch[T]]]
 
+  private def extractSql(using quotes:Quotes)(tree: quotes.reflect.Term): String =
+    import quotes.reflect.*
+    tree match
+      case tree@Lambda(params, Block(stats, sc:Apply/*(sql, List(Apply(scApply, List(Typed(Repeated(sqls, _), _)))))*/)) =>
+        sc match
+          case Apply(Apply(sql, List(Apply(scApply, List(Typed(Repeated(sqls,_),_)) ))), _) =>
+//            println("sql = " + sql.show(using Printer.TreeStructure))
+//            println("args = " + sqls.map(_.show(using Printer.TreeStructure)).mkString("\n"))
+            sqls.map{ case Literal(StringConstant(s)) => s }.mkString("?")
+
   private def buildLambdaOfJdbcValues[T: Type](using quotes: Quotes)(lambdaOfSqlWithArgs: quotes.reflect.Term): quotes.reflect.Term =
     import quotes.reflect.*
 
     lambdaOfSqlWithArgs match
-      case tree@Lambda(params, body) =>
+      case tree@Lambda(params, body) => // transform to new lambda with new mt and body
         val paramNames = params.map(_.name)
         val paramTypes = params.map(_.tpt.tpe)
         val mt = MethodType(paramNames)( (mt) => paramTypes, (mt) => TypeRepr.of[List[wsql.JdbcValue[?]|Null]] )
@@ -74,16 +84,16 @@ object BatchMacros {
   def createBatchImpl[T: Type](proc: Expr[T => SQLWithArgs], conn: Expr[Connection])(using quotes: Quotes): Expr[Batch[T]] =
     import quotes.reflect.*
 
-    val lambda = proc.asTerm match
+
+    proc.asTerm match
       case Inlined(_, _, Block(Nil, lambdaOfSqlWithArgs)) =>
-        val result = buildLambdaOfJdbcValues(lambdaOfSqlWithArgs)
-        result
+        val lambda = buildLambdaOfJdbcValues(lambdaOfSqlWithArgs)
+        val sql = extractSql(lambdaOfSqlWithArgs)
+        buildBatchExpr(conn, sql, lambda)
 
       case _ =>
         ???
 
-    val expr = buildBatchExpr(conn, lambda)
-    expr
 
 
 

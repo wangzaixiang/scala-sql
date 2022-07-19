@@ -21,8 +21,7 @@ class BatchTest {
 
 //      val name = test(user.name)(user.email)
       val name = new Demo().test(user.name)
-
-      sql"insert into users(name, age, email) values(${name}, ${age}, ${null})"
+      sql"insert into users(name, age, email) values(${name}, ${user.age}, ${null})"
     }
 
   }
