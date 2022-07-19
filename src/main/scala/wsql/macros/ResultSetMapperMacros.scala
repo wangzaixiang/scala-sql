@@ -4,7 +4,6 @@ import java.sql.*
 import scala.quoted.*
 import wsql.*
 
-// TODO refact code from experience of wjson
 object ResultSetMapperMacros:
 
   inline def resultSetMapper[T] = ${resultSetMapperImpl[T]}

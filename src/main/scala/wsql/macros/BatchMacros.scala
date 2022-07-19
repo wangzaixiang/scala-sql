@@ -19,23 +19,30 @@ object BatchMacros {
       TypeApply(Select.unique(Ref(Symbol.requiredModule("wsql.BatchImpl")), "apply"),
         List(TypeTree.of[T])
       ),
-      List(conn.asTerm, Literal(StringConstant(sql)),  // TODO
-        Ref(symbolFunc)
+      List(conn.asTerm, Literal(StringConstant(sql)), Ref(symbolFunc)
       )
     )
     val expr = Block(List(valdef), apply)
-
     expr.asExpr.asInstanceOf[Expr[Batch[T]]]
 
   private def extractSql(using quotes:Quotes)(tree: quotes.reflect.Term): String =
     import quotes.reflect.*
     tree match
-      case tree@Lambda(params, Block(stats, sc:Apply/*(sql, List(Apply(scApply, List(Typed(Repeated(sqls, _), _)))))*/)) =>
+      case tree@Lambda(params, Block(stats, sc:Apply)) =>
         sc match
           case Apply(Apply(sql, List(Apply(scApply, List(Typed(Repeated(sqls,_),_)) ))), _) =>
-//            println("sql = " + sql.show(using Printer.TreeStructure))
-//            println("args = " + sqls.map(_.show(using Printer.TreeStructure)).mkString("\n"))
             sqls.map{ case Literal(StringConstant(s)) => s }.mkString("?")
+
+  private def extractJdbcValues(using quotes:Quotes)(apply: quotes.reflect.Apply): quotes.reflect.Apply =
+    import quotes.reflect.*
+    apply match
+      case Apply(sc, args) =>
+        Apply(
+          TypeApply(
+            Select.unique(Ref(Symbol.requiredModule("scala.collection.immutable.List")), "apply"),
+            List(TypeTree.of[wsql.JdbcValue[?] | Null])
+          ), args
+        )
 
   private def buildLambdaOfJdbcValues[T: Type](using quotes: Quotes)(lambdaOfSqlWithArgs: quotes.reflect.Term): quotes.reflect.Term =
     import quotes.reflect.*
@@ -44,7 +51,7 @@ object BatchMacros {
       case tree@Lambda(params, body) => // transform to new lambda with new mt and body
         val paramNames = params.map(_.name)
         val paramTypes = params.map(_.tpt.tpe)
-        val mt = MethodType(paramNames)( (mt) => paramTypes, (mt) => TypeRepr.of[List[wsql.JdbcValue[?]|Null]] )
+        val mt = MethodType(paramNames)( (mt) => paramTypes, (mt) => TypeRepr.of[ListOfJdbcValues] )
         Lambda( Symbol.spliceOwner, mt, (meth, args)=> changeBody(params, args, body).changeOwner(meth) )
 
       case _ => throw new RuntimeException(("expect lambda"))
@@ -63,27 +70,17 @@ object BatchMacros {
           case id@Ident(name) => associations.getOrElse(id.symbol, super.transformTerm(tree)(owner))
           case _ => super.transformTerm(tree)(owner)
 
-    def extractJdbcValuesFromStringContext(apply: Apply): Apply =
-      apply match
-        case Apply(sc, args) =>
-          Apply(
-            TypeApply(
-              Select.unique(Ref(Symbol.requiredModule("scala.collection.immutable.List")), "apply"),
-              List( TypeTree.of[wsql.JdbcValue[?]| Null] )
-            ), args
-          )
 
     body match
       case Block(stats, stringContextApply: Apply) =>
         val newStats = changes.transformStats(stats)(Symbol.spliceOwner)
-        val extract = extractJdbcValuesFromStringContext(stringContextApply)
+        val extract = extractJdbcValues(stringContextApply)
         val extract2 = changes.transformTerm(extract)(Symbol.spliceOwner)
         Block(newStats, extract2)
 
 
   def createBatchImpl[T: Type](proc: Expr[T => SQLWithArgs], conn: Expr[Connection])(using quotes: Quotes): Expr[Batch[T]] =
     import quotes.reflect.*
-
 
     proc.asTerm match
       case Inlined(_, _, Block(Nil, lambdaOfSqlWithArgs)) =>
@@ -93,8 +90,6 @@ object BatchMacros {
 
       case _ =>
         ???
-
-
 
 
   def createMysqlBatchImpl[T: Type](proc: Expr[T => SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
