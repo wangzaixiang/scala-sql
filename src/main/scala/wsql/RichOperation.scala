@@ -36,9 +36,6 @@ given ConnectionOps with
           conn.rollback()
           throw ex
 
-    /**
-     * Limit: the proc body should be simple statements. dont declare class/trait/object definitions inside.
-     */
     inline def createBatch[T](inline proc: T => SQLWithArgs): Batch[T] =
       ${ BatchMacros.createBatchImpl[T]('proc, 'conn) }
 

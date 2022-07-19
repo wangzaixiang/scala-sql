@@ -6,19 +6,12 @@ import wsql.{Batch, SQLWithArgs}
 
 object BatchMacros {
 
-  // List[ JdbcValue[?] | Null ]
-  private def listOfJdbcValueTpt(using quotes: Quotes) = {
-    import quotes.reflect.*
-    val jdbcValueTpt = TypeTree.of[ wsql.JdbcValue[?]|Null ]
-    Applied(TypeIdent(Symbol.requiredClass("scala.collection.immutable.List")), List(jdbcValueTpt))
-  }
+  type ListOfJdbcValues = List[wsql.JdbcValue[?]|Null]
 
   private def buildBatchExpr[T: Type](using quotes: Quotes)(conn: Expr[Connection], arg2JdbcValuesLambda: quotes.reflect.Term): Expr[Batch[T]] =
     import quotes.reflect.*
 
-    val funcTpt = Applied(TypeIdent(Symbol.requiredClass("scala.Function1")),
-      List(TypeTree.of[T], listOfJdbcValueTpt)
-    )
+    val funcTpt = TypeTree.of[ Function1[T, ListOfJdbcValues ] ]
     val symbolFunc = Symbol.newVal(Symbol.spliceOwner, "func", funcTpt.tpe, Flags.EmptyFlags, Symbol.noSymbol)
 
     val valdef = ValDef(symbolFunc, Some(arg2JdbcValuesLambda))
@@ -26,7 +19,7 @@ object BatchMacros {
       TypeApply(Select.unique(Ref(Symbol.requiredModule("wsql.BatchImpl")), "apply"),
         List(TypeTree.of[T])
       ),
-      List(conn.asTerm, Literal(StringConstant("select stmt")),
+      List(conn.asTerm, Literal(StringConstant("select stmt")),  // TODO
         Ref(symbolFunc)
       )
     )
@@ -34,116 +27,56 @@ object BatchMacros {
 
     expr.asExpr.asInstanceOf[Expr[Batch[T]]]
 
-  private def buildLamdbaOfJdbcValues[T: Type](using quotes: Quotes)(lambdaOfSqlWithArgs: quotes.reflect.Term): quotes.reflect.Term =
+  private def buildLambdaOfJdbcValues[T: Type](using quotes: Quotes)(lambdaOfSqlWithArgs: quotes.reflect.Term): quotes.reflect.Term =
     import quotes.reflect.*
 
-    def buildMethodType(paramss: List[ParamClause], tpt: TypeTree): MethodType =
-      paramss match
-        case head :: Nil =>
-          MethodType(head.params.map(_.name))(
-            (mt) => head.params.map(_.asInstanceOf[ValDef].tpt.tpe),
-            (mt) => tpt.tpe)
-        case Nil =>
-          MethodType(Nil)( mt=>Nil, mt=> tpt.tpe)
-        case others =>
-          val init = others.init
-          val last = others.last
-          val tree = TypeTree.of[Any](using buildMethodType(List(last), tpt).asType.asInstanceOf[Type[Any]])
-          buildMethodType(init, tree)
+    lambdaOfSqlWithArgs match
+      case tree@Lambda(params, body) =>
+        val paramNames = params.map(_.name)
+        val paramTypes = params.map(_.tpt.tpe)
+        val mt = MethodType(paramNames)( (mt) => paramTypes, (mt) => TypeRepr.of[List[wsql.JdbcValue[?]|Null]] )
+        Lambda( Symbol.spliceOwner, mt, (meth, args)=> changeBody(params, args, body).changeOwner(meth) )
 
+      case _ => throw new RuntimeException(("expect lambda"))
 
-    // transform defdef method to return List[JdbcValue[?]] than SqlWithArgs
-    val transform = new TreeMap :
+  private def changeBody(using quotes:Quotes)(oldArgs: List[quotes.reflect.Tree], newArgs: List[quotes.reflect.Tree],
+                                              body: quotes.reflect.Term): quotes.reflect.Term =
+    import quotes.reflect.*
+    val associations: Map[Symbol, Term] = oldArgs.zip(newArgs).foldLeft(Map.empty){
+      case (m, (oldParam, newParam: Term)) => m.updated(oldParam.symbol, newParam)
+      case (m, (oldParam, newParam: Tree)) => throw new RuntimeException("Term expected")
+    }
 
-      val symbolMapping = collection.mutable.Map[Symbol, Symbol]()
-
-      override def transformStatement(tree: Statement)(owner: Symbol): Statement =
-        tree match
-          case tree@DefDef(name, paramss, tpt, rhs0) if tree.symbol.owner == Symbol.spliceOwner => // top level defdef
-            val arg0 = paramss(0).params(0)  //
-
-            val funcTpe = MethodType(List(arg0.symbol.name))(
-              (mt) => List(TypeTree.of[T].tpe),
-              (mt) => listOfJdbcValueTpt.tpe
-            )
-            val newDefDefSym = Symbol.newMethod(Symbol.spliceOwner, "$anonfun", funcTpe, Flags.EmptyFlags, Symbol.noSymbol)
-            symbolMapping(tree.symbol) = newDefDefSym
-
-            val rhsFn: List[List[Tree]] => Option[Term] = paramss =>
-              symbolMapping( arg0.symbol ) = paramss(0)(0).symbol
-              rhs0 match
-                case Some(Block(stats, strContext: Apply)) =>
-                  val newStats = transformStats(stats)(newDefDefSym)
-                  val extract = extractJdbcValuesFromStringContext(strContext)
-                  val extract2 = transformTerm(extract)(newDefDefSym)
-                  Some(Block(newStats, extract2))
-                case _ => None
-
-            DefDef(newDefDefSym, rhsFn)
-
-          // support defdef inside the lambda
-          case tree@DefDef(name, paramss0, tpt, rhs0) if tree.symbol.owner != Symbol.spliceOwner =>
-            val defSym = tree.symbol
-            val owner = symbolMapping(tree.symbol.owner)
-            val funcType = buildMethodType(paramss0, tpt )
-
-            val newDefDefSym = Symbol.newMethod(owner, defSym.name, funcType, defSym.flags, Symbol.noSymbol)
-            symbolMapping(defSym) = newDefDefSym
-
-            val rhsFn: List[List[Tree]] => Option[Term] = paramss =>
-              for( i <- 0 until paramss.size; j <- 0 until paramss(i).size)
-                val param = paramss(i)(j)
-                val param0 = paramss0(i).params(j)
-                symbolMapping( param0.symbol ) = param.symbol
-
-              rhs0.map(term => transformTerm(term)(owner))
-            DefDef(newDefDefSym, rhsFn)
-
-          case tree: ClassDef =>
-            ???   // TODO add support for clone classdef
-
-          // support valdef definition
-          case tree@ValDef(name, tpt, rhs) =>
-            val owner0 = tree.symbol.owner
-            val owner = symbolMapping(owner0)
-            val tpt1 = transformTypeTree(tree.tpt)(owner)
-            val rhs1 = tree.rhs.map(x => transformTerm(x)(owner))
-
-            val symbol = Symbol.newVal(owner, name, tpt1.tpe, Flags.Final, Symbol.noSymbol)
-            val valdef = ValDef(symbol, rhs1)
-            symbolMapping(tree.symbol) = symbol
-            valdef
-
-          case _ => super.transformStatement(tree)(owner)
-
+    val changes = new TreeMap :
       override def transformTerm(tree: Term)(owner: Symbol): Term =
         tree match
-          case id@Ident(name) if symbolMapping contains id.symbol =>
-            Ref( symbolMapping(id.symbol) )
+          case id@Ident(name) => associations.getOrElse(id.symbol, super.transformTerm(tree)(owner))
           case _ => super.transformTerm(tree)(owner)
 
-      // extract args from StringContext(parts).apply(args)
-      def extractJdbcValuesFromStringContext(apply: Apply): Apply =
-        val jdbcValueTpt = TypeTree.of[ wsql.JdbcValue[?] | Null]
-        apply match
-          case Apply(sc, args) =>
-            Apply(
-              TypeApply(
-                Select.unique(Ref(Symbol.requiredModule("scala.collection.immutable.List")), "apply"),
-                List( jdbcValueTpt )
-              ), args
-            )
-    end transform
+    def extractJdbcValuesFromStringContext(apply: Apply): Apply =
+      apply match
+        case Apply(sc, args) =>
+          Apply(
+            TypeApply(
+              Select.unique(Ref(Symbol.requiredModule("scala.collection.immutable.List")), "apply"),
+              List( TypeTree.of[wsql.JdbcValue[?]| Null] )
+            ), args
+          )
 
-    val result = transform.transformTerm(lambdaOfSqlWithArgs)(Symbol.spliceOwner)
-    result
+    body match
+      case Block(stats, stringContextApply: Apply) =>
+        val newStats = changes.transformStats(stats)(Symbol.spliceOwner)
+        val extract = extractJdbcValuesFromStringContext(stringContextApply)
+        val extract2 = changes.transformTerm(extract)(Symbol.spliceOwner)
+        Block(newStats, extract2)
+
 
   def createBatchImpl[T: Type](proc: Expr[T => SQLWithArgs], conn: Expr[Connection])(using quotes: Quotes): Expr[Batch[T]] =
     import quotes.reflect.*
 
     val lambda = proc.asTerm match
       case Inlined(_, _, Block(Nil, lambdaOfSqlWithArgs)) =>
-        val result = buildLamdbaOfJdbcValues(lambdaOfSqlWithArgs)
+        val result = buildLambdaOfJdbcValues(lambdaOfSqlWithArgs)
         result
 
       case _ =>
@@ -151,6 +84,8 @@ object BatchMacros {
 
     val expr = buildBatchExpr(conn, lambda)
     expr
+
+
 
   def createMysqlBatchImpl[T: Type](proc: Expr[T => SQLWithArgs], conn: Expr[Connection])(using Quotes): Expr[Batch[T]] =
     '{???}

@@ -14,10 +14,13 @@ class BatchTest {
     val batch = conn.createBatch[User] { user =>
       val age = user.age + 10
 
+      class Demo { def test(s:String) = s.toUpperCase }
+
       def test(s: String)(s2: String) : String =
         s.toUpperCase.nn + s2.toUpperCase
 
-      val name = test(user.name)(user.email)
+//      val name = test(user.name)(user.email)
+      val name = new Demo().test(user.name)
 
       sql"insert into users(name, age, email) values(${name}, ${age}, ${null})"
     }
