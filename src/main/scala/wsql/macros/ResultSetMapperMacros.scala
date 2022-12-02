@@ -66,8 +66,8 @@ object ResultSetMapperMacros:
                     '{ withDefaultOptionAnyRef[t2](${Expr(columnName)}, ${defaultExpr}, $rs)(using ${Expr.summon[JdbcValueAccessor[t2|Null]].get}) }
 
                 case _ => // String
-                  val (defaultExpr:Expr[Option[t]], none) = defaultParams.get(name) match
-                    case Some(deff) => ('{ Some(${deff.asInstanceOf[Expr[t]]}) }, false)
+                  val (defaultExpr:Expr[Option[Any]], none) = defaultParams.get(name) match
+                    case Some(deff) => ('{ Some(${deff}) }, false)
                     case None => ('{ None }, true)
                   val primitive = isPrimitive(TypeRepr.of[t])
 

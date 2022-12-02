@@ -4,7 +4,7 @@ name := "wsql"
 
 version := "3.0.0-RC1"
 
-scalaVersion := "3.1.3"
+scalaVersion := "3.2.1"
 
 scalacOptions := Seq( "-Yexplicit-nulls" )
 
