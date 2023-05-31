@@ -1,138 +1,178 @@
 package wsql
 
-import java.sql._
-import java.lang.{Boolean => JBoolean, Byte => JByte, Integer => JInteger, Long => JLong, Short => JShort}
-import java.lang.{Double => JDouble, Float => JFloat}
-import java.math.{BigDecimal => JBigDecimal}
+import java.sql.*
+import java.lang.{Boolean as JBoolean, Byte as JByte, Integer as JInteger, Long as JLong, Short as JShort}
+import java.lang.{Double as JDouble, Float as JFloat}
+import java.math.BigDecimal as JBigDecimal
 import java.io.{InputStream, Reader}
 import java.net.URL
 import java.{math, sql, util}
 import java.util.Calendar
-
 import scala.Array
+import scala.annotation.unused
 import scala.reflect.ClassTag
 
 /**
  * provide a offline Box for ResultSet which is scrollable and only valid with an open connection.
  */
 object Row {
+  inline def ??? = throw new UnsupportedOperationException
 
   sealed abstract class Cell[T](val name: String, val sqltype: Int, val value: T) {
-    inline def ??? = throw new UnsupportedOperationException
-    def getString: String|Null = if (value == null) null else value.toString
-    def getLong: Long  = ???
+    def isNull: Boolean = false
+    def getString: String|Null =
+      if isNull then null
+      else value.toString
+
+    def getLong: Long
     def getInt: Int = getLong.toInt
     def getByte: Byte = getLong.toByte
     def getShort: Short = getLong.toShort
     def getDouble: Double = getLong.toDouble
     def getFloat: Float = getDouble.toFloat
     def getBoolean: Boolean = getLong != 0
-    def getBigDecimal: JBigDecimal|Null = new JBigDecimal(getLong)
-    def getScalaBigDecimal: BigDecimal|Null = getBigDecimal match
-      case null => null
-      case x: JBigDecimal => BigDecimal(x)
+    def getBigDecimal: JBigDecimal|Null =
+      if isNull then null
+      else new JBigDecimal(getLong)
+
+    def getScalaBigDecimal: BigDecimal|Null =
+      if isNull then null
+      else BigDecimal( JBigDecimal(getLong) )
 
     def getDate: java.sql.Date|Null = ???
     def getTime: java.sql.Time|Null = ???
     def getTimestamp: java.sql.Timestamp|Null = ???
-    def getBytes: Array[Byte]|Null = {
-      val string = getString
-      if (string == null) null
-      else string.getBytes
-    }
+    def getBytes: Array[Byte]|Null =
+      if isNull then null
+      else getString.nn.getBytes
+
     def getAsciiStream: InputStream|Null = ???
     def getBinaryStream: InputStream|Null = ???
     def getObject: AnyRef|Null = value.asInstanceOf[AnyRef]
 
     override def toString = s"$name:$value"
   }
-  class BooleanCell(name:String, sqlType: Int, value: Boolean) extends Cell(name, sqlType, value) {
-    override def getBoolean = value
-    override def getString = value.toString
+  private class BooleanCell(name:String, sqlType: Int, value: Boolean) extends Cell(name, sqlType, value) {
+    override def getBoolean: Boolean = value
+    override def getLong: Long = if value then 1 else 0
+    override def getString: String = value.toString
   }
-  class ByteCell(name:String, sqltype: Int, value: Byte) extends Cell(name, sqltype, value) {
-    override def getLong = value.toLong
+  private class ByteCell(name:String, sqltype: Int, value: Byte) extends Cell(name, sqltype, value) {
+    override def getShort: Short = value.toShort
+    override def getInt: Int = value.toInt
+    override def getLong: Long = value.toLong
   }
-  class ShortCell(name:String, sqltype:Int, value: Short) extends Cell(name, sqltype, value) {
-    override def getLong = value.toLong
+  private class ShortCell(name:String, sqltype:Int, value: Short) extends Cell(name, sqltype, value) {
+    override def getInt: Int = value.toInt
+    override def getLong: Long = value.toLong
   }
-  class IntegerCell(name:String, sqltype:Int, value: Int) extends Cell(name, sqltype, value) {
-    override def getLong = value.toLong
+  private class IntegerCell(name:String, sqltype:Int, value: Int) extends Cell(name, sqltype, value) {
+    override def getLong: Long = value.toLong
   }
-  class LongCell(name:String, sqltype:Int, value: Long) extends Cell(name, sqltype, value) {
-    override def getLong = value
+  private class LongCell(name:String, sqltype:Int, value: Long) extends Cell(name, sqltype, value) {
+    override def getLong: Long = value
   }
-  class FloatCell(name:String, sqltype: Int, value: Float) extends Cell(name, sqltype, value) {
-    override def getLong = value.toLong
-    override def getDouble = value.toDouble
+  private class BigIntegerCell(name: String, sqltype: Int, value: BigInt) extends Cell(name, sqltype, value) {
+    override def getLong: Long = value.longValue
+    override def getBigDecimal: JBigDecimal | Null = JBigDecimal(value.bigInteger)
   }
-  class DoubleCell(name:String, sqltype: Int, value: Double) extends Cell(name, sqltype, value) {
-    override def getLong = value.toLong
-    override def getDouble = value
+  private class FloatCell(name:String, sqltype: Int, value: Float) extends Cell(name, sqltype, value) {
+    override def getLong: Long = value.toLong
+    override def getDouble: Double = value.toDouble
   }
-  class StringCell(name:String, sqltype: Int, value: String|Null) extends Cell(name, sqltype, value) {
-    override def getLong = if (value == null) 0 else value.toLong
-    override def getDouble = if (value == null) 0 else value.toDouble
-    override def getBigDecimal = if (value == null) null else new JBigDecimal(value)
+  private class DoubleCell(name:String, sqltype: Int, value: Double) extends Cell(name, sqltype, value) {
+    override def getLong: Long = value.toLong
+    override def getDouble: Double = value
   }
-  class BigDecimalCell(name:String, sqltype:Int, value: JBigDecimal|Null) extends Cell(name, sqltype, value){
-    override def getLong = if(value == null) 0L  else value.longValue
-    override def getDouble = if(value == null) 0d else value.doubleValue
-    override def getBigDecimal = value
+  private class StringCell(name:String, sqltype: Int, value: String) extends Cell(name, sqltype, value) {
+    override def getLong: Long = value.toLong
+    override def getDouble: Double = value.toDouble
+    override def getBigDecimal: JBigDecimal = new JBigDecimal(value)
   }
-  class DateCell(name:String, sqltype:Int, value: java.sql.Date|Null) extends Cell(name, sqltype, value) {
-    override def getDate = value
-    override def getTime = if (value == null) null else new Time(value.getTime.nn)
-    override def getTimestamp = if (value == null) null else new Timestamp(value.getTime.nn)
+  private class BigDecimalCell(name:String, sqltype:Int, value: JBigDecimal) extends Cell(name, sqltype, value){
+    override def getLong: Long = value.longValue
+    override def getDouble: Double = value.doubleValue
+    override def getBigDecimal: JBigDecimal = value
   }
-  class TimeCell(name:String, sqltype: Int, value: java.sql.Time|Null) extends Cell(name, sqltype, value) {
-    override def getTime = value
-    override def getDate = if (value == null) null else new Date(value.getTime)
-    override def getTimestamp = if (value == null) null else new Timestamp(value.getTime)
+  private class DateCell(name:String, sqltype:Int, value: java.sql.Date) extends Cell(name, sqltype, value) {
+    override def getDate: Date  = value
+    override def getTime: Time = new Time(value.getTime.nn)
+    override def getTimestamp: Timestamp  = new Timestamp(value.getTime.nn)
+
+    override def getLong: Long = ???
   }
-  class TimestampCell(name:String, sqltype: Int, value: java.sql.Timestamp|Null) extends Cell(name, sqltype, value){
-    override def getTimestamp = value
-    override def getDate = if (value == null) null else new Date(value.getTime)
-    override def getTime = if (value == null) null else new Time(value.getTime)
+  private class TimeCell(name:String, sqltype: Int, value: java.sql.Time) extends Cell(name, sqltype, value) {
+    override def getTime: Time = value
+    override def getDate: Date = new Date(value.getTime)
+    override def getTimestamp: Timestamp = new Timestamp(value.getTime)
+
+    override def getLong: Long = ???
   }
-  class BytesCell(name:String, sqltype: Int, value: Array[Byte]|Null) extends Cell(name, sqltype, value) {
-    override def getString = if (value == null) null else new String(value)
-    override def getBytes = value
+  private class TimestampCell(name:String, sqltype: Int, value: java.sql.Timestamp) extends Cell(name, sqltype, value){
+    override def getTimestamp: Timestamp = value
+    override def getDate: Date = new Date(value.getTime)
+    override def getTime: Time = new Time(value.getTime)
+
+    override def getLong: Long = ???
   }
-  class NullCell[T](name: String, sqltype:Int) extends Cell[T](name, sqltype, null.asInstanceOf[T]) {
-    override def getLong = 0
-    override def getString = null
-    override def getBigDecimal = null
-    override def getDate = null
-    override def getTime = null
-    override def getTimestamp = null
-    override def getBytes = null
+  private class BytesCell(name:String, sqltype: Int, value: Array[Byte]) extends Cell(name, sqltype, value) {
+    override def getString: String = new String(value)
+    override def getBytes: Array[Byte] = value
+
+    override def getLong: Long = ???
+  }
+  private class NullCell[T](name: String, sqltype:Int) extends Cell[T](name, sqltype, null.asInstanceOf[T]) {
+    override def isNull: Boolean = true
+    override def getLong: Long = 0
+    override def getString: String | Null = null
+    override def getBigDecimal: JBigDecimal | Null = null
+    override def getDate: Date | Null = null
+    override def getTime: Time | Null = null
+    override def getTimestamp: Timestamp | Null = null
+    override def getBytes: Array[Byte] | Null = null
   }
   class Cell_???(name: String, sqltype: Int) extends Cell[Unit](name, sqltype, ()) {
+    override def getLong: Long = ???
     override def getString: String = ???
   }
 
-  def resultSetToRow(meta: ResultSetMetaData, rs: ResultSet): Row = {
+  private def resultSetToRow(meta: ResultSetMetaData, rs: ResultSet): Row = {
     val cells: Seq[Cell[_]] = {
       for (i <- 1 to meta.getColumnCount) yield {
         val name = meta.getColumnLabel(i).nn
         val sqltype = meta.getColumnType(i)
         val isnull = rs.getObject(i) == null
+        val isSigned = meta.isSigned(i)
 
         if (isnull) new NullCell(name, sqltype)
         else sqltype match {
-          case Types.DECIMAL | Types.NUMERIC => new BigDecimalCell(name, sqltype, rs.getBigDecimal(i))
-          case Types.BINARY | Types.BLOB | Types.LONGVARBINARY | Types.VARBINARY => new BytesCell(name, sqltype, rs.getBytes(i))
+          case Types.DECIMAL | Types.NUMERIC => new BigDecimalCell(name, sqltype, rs.getBigDecimal(i).nn)
+          case Types.BINARY | Types.BLOB | Types.LONGVARBINARY | Types.VARBINARY => new BytesCell(name, sqltype, rs.getBytes(i).nn)
           case Types.BIT | Types.BOOLEAN => new BooleanCell(name, sqltype, rs.getBoolean(i))
           case Types.CLOB | Types.NCLOB | Types.CHAR | Types.NCHAR | Types.VARCHAR | Types.NVARCHAR | Types.LONGNVARCHAR | Types.LONGVARCHAR =>
-            new StringCell(name, sqltype, rs.getString(i))
-          case Types.DATE => new DateCell(name, sqltype, rs.getDate(i))
+            new StringCell(name, sqltype, rs.getString(i).nn)
           case Types.FLOAT => new FloatCell(name, sqltype, rs.getFloat(i))
           case Types.DOUBLE | Types.REAL => new DoubleCell(name, sqltype, rs.getDouble(i))
-          case Types.TINYINT | Types.SMALLINT | Types.INTEGER | Types.BIGINT => new LongCell(name, sqltype, rs.getLong(i))
-          case Types.TIME => new TimeCell(name, sqltype, rs.getTime(i))
-          case Types.TIMESTAMP => new TimestampCell(name, sqltype, rs.getTimestamp(i))
-          case _ => new Cell_???(name, sqltype) // no error, but that's is not accessable
+          case Types.TINYINT =>
+            if isSigned then new ByteCell(name, sqltype, rs.getByte(i))
+            else new ShortCell(name, sqltype, rs.getShort(i))
+          case Types.SMALLINT =>
+            if isSigned then new ShortCell(name, sqltype, rs.getShort(i))
+            else new IntegerCell(name, sqltype, rs.getInt(i))
+          case Types.INTEGER =>
+            if isSigned then new IntegerCell(name, sqltype, rs.getInt(i))
+            else new LongCell(name, sqltype, rs.getLong(i))
+          case Types.BIGINT =>
+            if isSigned then new LongCell(name, sqltype, rs.getLong(i))
+            else new BigIntegerCell(name, sqltype, BigInt( rs.getBigDecimal(i).nn.toBigInteger.nn) )
+          case Types.DATE =>
+            new DateCell(name, sqltype, rs.getDate(i).nn)
+          case Types.TIME =>
+            new TimeCell(name, sqltype, rs.getTime(i).nn)
+          case Types.TIMESTAMP =>
+            new TimestampCell(name, sqltype, rs.getTimestamp(i).nn)
+          case _ =>
+            new Cell_???(name, sqltype) // no error, but that's is not accessable
         }
       }
     }
@@ -152,10 +192,10 @@ class Row(val cells: Seq[Row.Cell[_]]) extends ResultSet {
     (cell.name.toLowerCase.nn, cell)
   }.toMap
 
-  override def toString = cells.map(_.toString).mkString("Row(", ",", ")")
+  override def toString: String = cells.map(_.toString).mkString("Row(", ",", ")")
 
-  @inline def cell(index:Int) = cells(index-1)
-  @inline def cell(key: String) = cellsByName(key.toLowerCase.nn)
+  @inline private def cell(index:Int) = cells(index-1)
+  @inline private def cell(key: String) = cellsByName(key.toLowerCase.nn)
 
   def getString(index: Int): String|Null = cell(index).getString
   def getString(key: String): String|Null = cell(key).getString

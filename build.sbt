@@ -2,9 +2,9 @@ organization := "com.github.wangzaixiang"
 
 name := "wsql"
 
-version := "3.0.0-RC1"
+version := "3.0.0-RC2"
 
-scalaVersion := "3.2.1"
+scalaVersion := "3.3.0"
 
 scalacOptions := Seq( "-Yexplicit-nulls" )
 

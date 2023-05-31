@@ -154,10 +154,10 @@ object JdbcValueAccessor:
       if(value == null) stmt.setBigDecimal(index, null)
       else stmt.setBigDecimal(index, value.bigDecimal)
     inline def passOut(rs: ResultSet, index: Int): BigDecimal|Null =
-      val it = rs.getBigDecimal(index);
+      val it = rs.getBigDecimal(index)
       if (it != null) BigDecimal(it) else null
     inline def passOut(rs: ResultSet, name: String): BigDecimal|Null =
-      val it = rs.getBigDecimal(name);
+      val it = rs.getBigDecimal(name)
       if (it != null) BigDecimal(it) else null
 
   given _jva_array0: JdbcValueAccessor[Array[Byte]|Null] with
@@ -192,11 +192,11 @@ object JdbcValueAccessor:
       else summon[JdbcValueAccessor[T]].passIn(stmt, index, value)
 
     inline def passOut(rs: ResultSet, index: Int): T|Null =
-      val it = summon[JdbcValueAccessor[T]].passOut(rs, index);
+      val it = summon[JdbcValueAccessor[T]].passOut(rs, index)
       if(rs.wasNull) null else it
 
     inline def passOut(rs: ResultSet, name: String): T|Null =
-      val it = summon[JdbcValueAccessor[T]].passOut(rs, name);
+      val it = summon[JdbcValueAccessor[T]].passOut(rs, name)
       if(rs.wasNull) null else it
 
 /**
@@ -264,25 +264,25 @@ object ResultSetMapper:
 
   given _rsm_bd: ResultSetMapper[BigDecimal|Null] with
     def from(rs: ResultSet): BigDecimal|Null =
-      val it = rs.getBigDecimal(1);
+      val it = rs.getBigDecimal(1)
       if (it != null) BigDecimal(it) else null
 
 sealed case class JdbcValue[T: JdbcValueAccessor](value: T):
   def accessor: JdbcValueAccessor[T] = summon[JdbcValueAccessor[T]]
-  def passIn(stmt: PreparedStatement, index: Int) = accessor.passIn(stmt, index, value)
+  def passIn(stmt: PreparedStatement, index: Int): Unit = accessor.passIn(stmt, index, value)
 
 object JdbcValue:
   given [T: JdbcValueAccessor]: Conversion[T, JdbcValue[T]] with
-    override def apply(t: T) = JdbcValue(t)
+    override def apply(t: T): JdbcValue[T] = JdbcValue(t)
 
   given _nn [T <: AnyVal: JdbcValueAccessor]: Conversion[Option[T], JdbcValue[Option[T]]] with
-    override def apply(t: Option[T]) = JdbcValue(t)(using summon[JdbcValueAccessor[Option[T]]])
+    override def apply(t: Option[T]): JdbcValue[Option[T]] = JdbcValue(t)(using summon[JdbcValueAccessor[Option[T]]])
 
-  given _null [T <: AnyRef](using JdbcValueAccessor[T|Null]): Conversion[Option[T], JdbcValue[Option[T]]] with
-    override def apply(t: Option[T]) = JdbcValue(t)(using summon[JdbcValueAccessor[Option[T]]])
+//  given _null [T <: AnyRef](using JdbcValueAccessor[T|Null]): Conversion[Option[T], JdbcValue[Option[T]]] with
+//    override def apply(t: Option[T]): JdbcValue[Option[T]] = JdbcValue(t)(using summon[JdbcValueAccessor[Option[T]]])
 
 extension (sc: StringContext)
-  def sql(args: JdbcValue[?]|Null *) = SQLWithArgs(sc.parts.mkString("?"), args)
+  def sql(args: JdbcValue[?]|Null *): SQLWithArgs = SQLWithArgs(sc.parts.mkString("?"), args)
 
   /**
     * SQL"" will validate the sql statement at compiler time.
@@ -290,7 +290,7 @@ extension (sc: StringContext)
   def SQL(args: JdbcValue[_]*): SQLWithArgs = ??? // macro  Macros.parseSQL
 
 given Conversion[String, SQLWithArgs] with
-  override def apply(stmt: String) = SQLWithArgs(stmt, Seq.empty)
+  override def apply(stmt: String): SQLWithArgs = SQLWithArgs(stmt, Seq.empty)
 
 extension (rs: ResultSet)
 
@@ -303,6 +303,7 @@ extension (rs: ResultSet)
 
 /**
  * currently, only classes supprt, dont support object yet.
+ * mapping a column name to a field name. such as field: userName, column: user_name
  */
 trait CaseClassColumnMapper:
   def columnName(field: String): String
@@ -327,6 +328,10 @@ class Camel2UnderscoreMapper extends CaseClassColumnMapper:
 class IdentityMapping extends CaseClassColumnMapper:
   def columnName(field: String): String = field
 
+/**
+ * annotated on a case class, to specify the column mapper, such as @UseColumnMapper(classOf[Camel2UnderscoreMapper])
+ * default using IdentityMapping
+ */
 class UseColumnMapper(value: Class[_ <: CaseClassColumnMapper]) extends StaticAnnotation
 
 /**
@@ -376,19 +381,35 @@ trait ConnectionOps:
     def executeUpdate(stmt: SQLWithArgs): Int
     def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(proc: ResultSet=>Unit = NoopProcessor): Int
     def generateKey[T: JdbcValueAccessor](stmt: SQLWithArgs): T
+    /**
+     * iterate rows
+     */
     def eachRow[T: ResultSetMapper](sql: SQLWithArgs)(f: T=>Unit): Unit
+
+    /**
+     * return rows as a List, T is a case class or a primitive type which can be mapped from the query ResultSet
+     * rows[SomeCaseClass] or rows[Int] for primitive types.
+     */
     def rows[T: ResultSetMapper](sql:SQLWithArgs): List[T]
+    /**
+     * joinRowsX is likes rows[T], but maybe return a TupleX which can used to retrieve 2 objects mapped.
+     */
     def joinRows2[T1:ResultSetMapper, T2:ResultSetMapper](sql: SQLWithArgs): List[(T1,T2)]
     def joinRows3[T1:ResultSetMapper, T2: ResultSetMapper, T3: ResultSetMapper](sql: SQLWithArgs): List[(T1,T2,T3)]
     def joinRows4[T1:ResultSetMapper, T2: ResultSetMapper, T3: ResultSetMapper, T4:ResultSetMapper](sql: SQLWithArgs): List[(T1,T2,T3, T4)]
+
     def row[T: ResultSetMapper](sql:SQLWithArgs): Option[T]
     def joinRow2[T1:ResultSetMapper, T2:ResultSetMapper](sql: SQLWithArgs): Option[(T1,T2)]
     def joinRow3[T1:ResultSetMapper, T2:ResultSetMapper, T3: ResultSetMapper](sql: SQLWithArgs): Option[(T1,T2, T3)]
     def joinRow4[T1:ResultSetMapper, T2:ResultSetMapper, T3: ResultSetMapper, T4:ResultSetMapper](sql: SQLWithArgs): Option[(T1,T2,T3,T4)]
+    /**
+     * runs a SQL which returns a single row, and a single integer column, such as select count(*) from table
+     */
     def queryInt(sql:SQLWithArgs): Int
 
 trait DataSourceOps:
   extension (dataSource: DataSource)
+    def withConnection[T](f: Connection => T): T
     def withStatement[T](f: Statement => T): T
     def withTransaction[T](f: Connection=>T): T
     inline def createBatch[T](proc: T=>SQLWithArgs): Batch[T]

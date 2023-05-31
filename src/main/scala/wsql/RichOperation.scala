@@ -52,7 +52,6 @@ given ConnectionOps with
         if (v == null) stmt.setNull(idx + 1, Types.VARCHAR) else v.passIn(stmt, idx + 1)
       }
 
-    // TODO provide a NOOP operation
     def executeUpdateWithGenerateKey(stmt: SQLWithArgs)(processGenerateKeys: ResultSet => Unit): Int =
       val prepared = conn.prepareStatement(stmt.sql,
         if(processGenerateKeys != NoopProcessor) Statement.RETURN_GENERATED_KEYS
@@ -278,7 +277,7 @@ given ConnectionOps with
 given DataSourceOps with
 
   extension (datasource: javax.sql.DataSource)
-    private def withConnection[T](f: Connection => T): T =
+    def withConnection[T](f: Connection => T): T =
       val conn = datasource.getConnection.nn
       try
         f(conn)
