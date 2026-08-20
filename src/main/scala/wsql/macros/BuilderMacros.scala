@@ -147,6 +147,8 @@ object BuilderMacros {
           term.asExpr match
             case '{ ($a: String) -> ($b: Any) } =>
               Some( Expr.unapply(a).get -> b )
+            case '{ ($a: String, $b: Any) } => 
+              Some( (Expr.unapply(a).get, b) )
             case _ => // TODO support (String, Any)
               report.error("*** unmatched expr " + term.show)
               None

@@ -200,7 +200,7 @@ object BeanBuilder {
      * @tparam T Element type (requires ClassTag for Array access)
      */
     given [T: ClassTag]: Conversion[ Array[T], Seq[T] ] with
-      def apply(src: Array[T]): Seq[T] = src.toSeq
+      def apply(src: Array[T]): Seq[T] = immutable.ArraySeq.unsafeWrapArray(src)
 
     /**
      * Converts List[T] to Array[T].
